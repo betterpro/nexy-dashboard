@@ -12,12 +12,22 @@ export async function GET(request, { params }) {
       );
     }
 
+    if (!process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME) {
+      return NextResponse.json(
+        { error: "ZAPP API credentials are missing" },
+        { status: 500 }
+      );
+    }
+
     // Make the HTTP request to ZAPP API
     const response = await axios.get(
       `http://15.223.4.61:17990/v1/station/${stationId}`,
       {
         headers: {
-          Authorization: `Basic ${process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME}`,
+          Authorization: `Basic ${Buffer.from(
+            process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME + ":"
+          ).toString("base64")}`,
+          "Content-Type": "application/json",
         },
         timeout: 10000,
       }
