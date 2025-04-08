@@ -48,7 +48,7 @@ export async function GET(request) {
 
     let batteries;
 
-    if (stationId.startsWith("ZAPP")) {
+    if (stationId.startsWith("ZAPP") || stationId.startsWith("WSEP")) {
       if (
         !process.env.NEXT_PUBLIC_ZAPP_API_URL ||
         !process.env.NEXT_PUBLIC_ZAPP_USERNAME

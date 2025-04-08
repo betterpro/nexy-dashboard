@@ -4,7 +4,7 @@ export async function getBatteryStatus(stationId) {
   try {
     let batteries;
 
-    if (stationId.startsWith("ZAPP")) {
+    if (stationId.startsWith("ZAPP") || stationId.startsWith("WSEP")) {
       try {
         // Use our proxy endpoint for ZAPP stations
         const response = await fetch(`/api/zapp/station/${stationId}`);
@@ -23,51 +23,41 @@ export async function getBatteryStatus(stationId) {
         throw error;
       }
     } else if (stationId.startsWith("NEXY")) {
-      if (
-        !process.env.NEXT_PUBLIC_NEXY_API_URL ||
-        !process.env.NEXT_PUBLIC_NEXY_API_TOKEN
-      ) {
-        throw new Error(
-          "NEXY API configuration is missing. Please check your environment variables."
-        );
-      }
-
       try {
-        // Fetch from Nexy API
-        const nexyApiRes = await axios.get(
-          process.env.NEXT_PUBLIC_NEXY_API_URL,
-          {
-            params: {
-              I: 64,
-              E: stationId,
-              token: process.env.NEXT_PUBLIC_NEXY_API_TOKEN,
-            },
-            timeout: 10000, // 10 second timeout
-          }
-        );
-
-        if (nexyApiRes.data.code !== 200) {
-          throw new Error(
-            `Failed to fetch data for NEXY station: ${
-              nexyApiRes.data.message || "Unknown error"
-            }`
-          );
-        }
-
-        // Fetch battery data from our API
-        const response = await fetch(
-          `/api/battery/status?stationId=${stationId}`
-        );
+        // Use our proxy endpoint for NEXY stations
+        const response = await fetch(`/api/nexy/station/${stationId}`);
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            `Failed to fetch battery status: ${
+            `Failed to fetch NEXY station data: ${
               errorData.error || response.statusText
             }`
           );
         }
         const data = await response.json();
-        batteries = data.batteries;
+
+        if (data.code !== 200) {
+          throw new Error(
+            `Failed to fetch data for NEXY station: ${
+              data.message || "Unknown error"
+            }`
+          );
+        }
+
+        // Fetch battery data from our API
+        const batteryResponse = await fetch(
+          `/api/battery/status?stationId=${stationId}`
+        );
+        if (!batteryResponse.ok) {
+          const errorData = await batteryResponse.json().catch(() => ({}));
+          throw new Error(
+            `Failed to fetch battery status: ${
+              errorData.error || batteryResponse.statusText
+            }`
+          );
+        }
+        const batteryData = await batteryResponse.json();
+        batteries = batteryData.batteries;
       } catch (error) {
         console.error("Error in NEXY API call:", error);
         throw new Error(`Failed to fetch NEXY station data: ${error.message}`);

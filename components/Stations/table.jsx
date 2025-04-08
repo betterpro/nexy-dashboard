@@ -31,16 +31,37 @@ const StationsTable = (Props) => {
   const [stationData, setStationData] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [deleteStationId, setDeleteStationId] = useState(null);
+
+  const [stationStatus, setStationStatus] = useState({
+    stationId: "",
+    status: "",
+    batteries: 0,
+  });
   const { userRole } = useAuth();
 
   const handleUpdateClick = async (stationId) => {
-    const data = await getBatteryStatus(stationId);
-    setStationData((prevData) => [
-      ...prevData.filter((item) => item.stationId !== stationId),
-      { stationId, ...data },
-    ]);
+    const data = await getBatteryStatus(stationId)
+      .then((data) => {
+        setStationData((prevData) => [
+          ...prevData.filter((item) => item.stationId !== stationId),
+          { stationId, ...data },
+        ]);
+        setStationStatus({
+          stationId: stationId,
+          status: "online",
+          batteries: data.batteries.length,
+        });
+      })
+      .catch((error) => {
+        console.error("Error updating station:", error);
+        setStationStatus({
+          stationId: stationId,
+          status: "offline",
+          batteries: 0,
+        });
+      });
   };
-  console.log(stationData);
+
   // Utility function to create a delay
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -83,7 +104,7 @@ const StationsTable = (Props) => {
       }
     }
   };
-
+  console.log(stationData);
   return (
     <div className="rounded-sm ">
       <div className="max-w-full overflow-x-auto">
@@ -112,90 +133,95 @@ const StationsTable = (Props) => {
             </tr>
           </thead>
           <tbody>
-            {Props.stations.map((packageItem, key) => {
-              return (
-                <tr key={key}>
-                  <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                    <img
-                      src={
-                        packageItem.logo !== ""
-                          ? packageItem.logo
-                          : "/images/favicon.ico"
-                      }
-                      className="rounded-full h-14 w-14"
-                    />
-                  </td>
-                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                    <p>{packageItem.stationId}</p>
-                    <p>{packageItem.stationTitle}</p>
-                  </td>
+            {Props.stations.map((packageItem, key) => (
+              <tr
+                key={key}
+                className={`${
+                  stationStatus.stationId === packageItem.stationId
+                    ? stationStatus.status === "online"
+                      ? "bg-success"
+                      : "bg-danger"
+                    : ""
+                }`}
+              >
+                <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                  <img
+                    src={
+                      packageItem.logo !== ""
+                        ? packageItem.logo
+                        : "/images/favicon.ico"
+                    }
+                    className="rounded-full h-14 w-14"
+                  />
+                </td>
+                <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                  <p>{packageItem.stationId}</p>
+                  <p>{packageItem.stationTitle}</p>
+                </td>
 
-                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                    <p>
-                      powerBank:{packageItem.powerBank}
-                      {stationData?.find(
-                        (s) => s.stationId === packageItem.stationId
-                      )?.imei === packageItem.stationId && (
-                        <span style={{ color: "red" }}>
-                          {stationData.find(
-                            (s) => s.stationId === packageItem.stationId
-                          )?.batteries?.length
-                            ? ` - ${
-                                stationData.find(
-                                  (s) => s.stationId === packageItem.stationId
-                                )?.batteries?.length
-                              }`
-                            : "Offline"}
+                <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                  <p>
+                    PowerBank: {packageItem.powerBank}
+                    {stationStatus.batteries > 0 &&
+                      stationStatus.stationId === packageItem.stationId &&
+                      stationStatus.status === "online" && (
+                        <span className="font-bold ml-2 text-danger">
+                          {stationStatus.batteries}
                         </span>
                       )}
-                    </p>
-                    <p>parking: {packageItem.parking}</p>
-                    <p>price: {packageItem.price}</p>
-                  </td>
-
-                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                    <p>{packageItem?.owner?.email}</p>
-                    <p>{packageItem?.owner?.phoneNumber}</p>
-                    <p>{packageItem?.owner?.partnerName}</p>
-                  </td>
-                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                    <div className="flex gap-5 items-center space-x-3">
-                      <Link href={`/stations/${packageItem.stationId}`}>
-                        <Icon icon="basil:edit-outline" height={20} />
-                      </Link>
-                      {userRole === ROLES.SUPER_ADMIN && (
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={packageItem.showAsPartner}
-                            onChange={() =>
-                              handleShowAsPartnerToggle(
-                                packageItem.stationId,
-                                packageItem.showAsPartner
-                              )
-                            }
-                            className="cursor-pointer"
-                          />
-                          <label className="ml-2">Show as Partner</label>
-                        </div>
+                    {stationStatus.stationId === packageItem.stationId &&
+                      stationStatus.status === "offline" && (
+                        <span className="font-bold ml-2 text-black">
+                          Offline
+                        </span>
                       )}
-                      <button
-                        onClick={() => handleUpdateClick(packageItem.stationId)}
-                        className="hover:text-primary"
-                      >
-                        <Icon height={20} icon="fluent-mdl2:sync-status" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteClick(packageItem.stationId)}
-                        className="text-danger"
-                      >
-                        <Icon icon="fluent:delete-20-regular" height={20} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
+                  </p>
+                  <p>Parking: {packageItem.parking}</p>
+                  <p>Price: {packageItem.price}</p>
+                </td>
+
+                <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                  <p>{packageItem?.owner?.email}</p>
+                  <p>{packageItem?.owner?.phoneNumber}</p>
+                  <p>{packageItem?.owner?.partnerName}</p>
+                </td>
+                <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                  <div className="flex gap-5 items-center space-x-3">
+                    <Link href={`/stations/${packageItem.stationId}`}>
+                      <Icon icon="basil:edit-outline" height={20} />
+                    </Link>
+                    {userRole === ROLES.SUPER_ADMIN && (
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={packageItem.showAsPartner}
+                          onChange={() =>
+                            handleShowAsPartnerToggle(
+                              packageItem.stationId,
+                              packageItem.showAsPartner
+                            )
+                          }
+                          className="cursor-pointer"
+                        />
+                        <label className="ml-2">Show as Partner</label>
+                      </div>
+                    )}
+                    <button
+                      onClick={() => handleUpdateClick(packageItem.stationId)}
+                      className="hover:text-primary"
+                    >
+                      <Icon height={20} icon="fluent-mdl2:sync-status" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(packageItem.stationId)}
+                      className="text-danger"
+                    >
+                      <Icon icon="fluent:delete-20-regular" height={20} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
