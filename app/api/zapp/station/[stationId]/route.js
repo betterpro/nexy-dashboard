@@ -12,7 +12,7 @@ export async function GET(request, { params }) {
       );
     }
 
-    if (!process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME) {
+    if (!process.env.NEXT_PUBLIC_ZAPP_USERNAME) {
       return NextResponse.json(
         { error: "ZAPP API credentials are missing" },
         { status: 500 }
@@ -25,7 +25,7 @@ export async function GET(request, { params }) {
       {
         headers: {
           Authorization: `Basic ${Buffer.from(
-            process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME + ":"
+            process.env.NEXT_PUBLIC_ZAPP_USERNAME + ":"
           ).toString("base64")}`,
           "Content-Type": "application/json",
         },

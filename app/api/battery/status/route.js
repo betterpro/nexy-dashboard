@@ -51,7 +51,7 @@ export async function GET(request) {
     if (stationId.startsWith("ZAPP")) {
       if (
         !process.env.NEXT_PUBLIC_ZAPP_API_URL ||
-        !process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME
+        !process.env.NEXT_PUBLIC_ZAPP_USERNAME
       ) {
         return NextResponse.json(
           { error: "ZAPP API configuration is missing" },
@@ -64,7 +64,7 @@ export async function GET(request) {
         `${process.env.NEXT_PUBLIC_ZAPP_API_URL}/v1/station/${stationId}`,
         {
           headers: {
-            Authorization: `Bearer ${process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME}`,
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_ZAPP_USERNAME}`,
           },
         }
       );
