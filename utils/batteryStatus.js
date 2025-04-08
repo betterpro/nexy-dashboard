@@ -5,48 +5,22 @@ export async function getBatteryStatus(stationId) {
     let batteries;
 
     if (stationId.startsWith("ZAPP")) {
-      if (
-        !process.env.NEXT_PUBLIC_ZAPP_API_URL ||
-        !process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME
-      ) {
-        throw new Error(
-          "ZAPP API configuration is missing. Please check your environment variables."
-        );
-      }
-
       try {
-        // Fetch battery data for ZAPP station with Basic Auth
-        const awsRes = await axios.get(
-          `${process.env.NEXT_PUBLIC_ZAPP_API_URL}/v1/station/${stationId}`,
-          {
-            headers: {
-              Authorization: `Basic ${process.env.NEXT_PUBLIC_ZAPP_AUTH_USERNAME}`,
-            },
-            timeout: 10000, // 10 second timeout
-          }
-        );
-        batteries = awsRes.data.batteries;
-      } catch (error) {
-        console.error("Error fetching ZAPP station data:", error);
-        if (error.response) {
-          // The request was made and the server responded with a status code
-          // that falls out of the range of 2xx
+        // Use our proxy endpoint for ZAPP stations
+        const response = await fetch(`/api/zapp/station/${stationId}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
           throw new Error(
-            `ZAPP API error: ${error.response.status} - ${
-              error.response.data?.message || "Unknown error"
+            `Failed to fetch ZAPP station data: ${
+              errorData.error || response.statusText
             }`
           );
-        } else if (error.request) {
-          // The request was made but no response was received
-          throw new Error(
-            "No response received from ZAPP API. Please check your network connection."
-          );
-        } else {
-          // Something happened in setting up the request that triggered an Error
-          throw new Error(
-            `Error setting up ZAPP API request: ${error.message}`
-          );
         }
+        const data = await response.json();
+        batteries = data.batteries;
+      } catch (error) {
+        console.error("Error fetching ZAPP station data:", error);
+        throw error;
       }
     } else if (stationId.startsWith("NEXY")) {
       if (
