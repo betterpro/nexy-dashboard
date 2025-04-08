@@ -1,0 +1,15 @@
+export const formList = [
+  { title: "Price", type: "number", value: "price", default: 2 },
+  { title: "Station ID", type: "text", value: "stationId" },
+  { title: "Title", type: "text", value: "stationTitle" },
+  { title: "Sub Title", type: "text", value: "stationSubTitle" },
+  { title: "Address", type: "text", value: "address" },
+  { title: "Instagram", type: "text", value: "instagram" },
+  { title: "Twitter", type: "text", value: "twitter" },
+  { title: "Tiktok", type: "text", value: "tiktok" },
+  { title: "Facebook", type: "text", value: "facebook" },
+  { title: "Telephone Number", type: "text", value: "tel" },
+  { title: "Website", type: "text", value: "website" },
+  { title: "Email", type: "text", value: "email" },
+  { title: "Logo", type: "text", value: "logo" },
+];
