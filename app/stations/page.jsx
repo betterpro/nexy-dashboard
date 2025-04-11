@@ -26,7 +26,7 @@ const Stations = () => {
           // Franchisee can only see their own stations
           stationsQuery = query(
             collection(DB, "stations"),
-            where("franchiseeId", "==", user?.franchiseeId)
+            where("franchiseeId", "==", user?.uid)
           );
         }
 

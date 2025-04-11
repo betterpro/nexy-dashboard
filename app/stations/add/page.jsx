@@ -133,7 +133,7 @@ function AddStation() {
       if (userRole === ROLES.SUPER_ADMIN) {
         data.franchiseeIds = ""; // Initialize empty array for super admin
       } else if (userRole === ROLES.FRANCHISEE) {
-        data.franchiseeId = user?.franchiseeId ?? ""; // Initialize array with current franchisee's ID
+        data.franchiseeId = user?.uid ?? ""; // Initialize array with current franchisee's ID
       }
 
       // Add station to Firestore using setDoc with stationId as document ID
