@@ -26,15 +26,35 @@ const Stations = () => {
           // Franchisee can only see their own stations
           stationsQuery = query(
             collection(DB, "stations"),
-            where("franchiseeId", "==", user?.uid)
+            where("franchiseeId", "==", user?.franchiseeId)
           );
         }
 
         const querySnapshot = await getDocs(stationsQuery);
-        const stationsData = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const stationsData = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          // Ensure each station has default timezone and operating hours if not set
+          return {
+            id: doc.id,
+            ...data,
+            timezone: data.timezone || 'America/Vancouver', // Default timezone
+            // Default operating hours for each day if not set
+            suStart: data.suStart || 8,
+            suEnd: data.suEnd || 20,
+            moStart: data.moStart || 8,
+            moEnd: data.moEnd || 20,
+            tuStart: data.tuStart || 8,
+            tuEnd: data.tuEnd || 20,
+            weStart: data.weStart || 8,
+            weEnd: data.weEnd || 20,
+            thStart: data.thStart || 8,
+            thEnd: data.thEnd || 20,
+            frStart: data.frStart || 8,
+            frEnd: data.frEnd || 20,
+            saStart: data.saStart || 8,
+            saEnd: data.saEnd || 20,
+          };
+        });
 
         setStations(stationsData);
       } catch (error) {
@@ -77,7 +97,10 @@ const Stations = () => {
 
         <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
           <div className="max-w-full overflow-x-auto">
-            <StationsTable stations={stations} setStations={setStations} />
+            <StationsTable 
+              stations={stations} 
+              setStations={setStations} 
+            />
           </div>
         </div>
       </div>

@@ -34,19 +34,19 @@ const OrdersList = () => {
       let ordersQuery;
 
       // Base query with ordering by startDate and limit
-      const baseQuery = query(
-        collection(DB, "rents"),
-        orderBy("startDate", "desc"),
-        limit(pageSize)
-      );
+      
 
       // Apply role-based filtering
       if (userRole === ROLES.SUPER_ADMIN) {
-        ordersQuery = baseQuery;
+        ordersQuery = query(
+        collection(DB, "rents"),
+        orderBy("startDate", "desc"),
+        limit(pageSize)
+      );;
       } else if (userRole === ROLES.FRANCHISEE) {
         const stationsQuery = query(
           collection(DB, "stations"),
-          where("franchiseeId", "==", user.uid)
+          where("franchiseeId", "==", user?.franchiseeId)
         );
         const stationsSnapshot = await getDocs(stationsQuery);
         const stationIds = stationsSnapshot.docs.map((doc) => doc.id);
