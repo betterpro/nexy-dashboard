@@ -11,8 +11,12 @@ export async function GET(request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Get all stations from Firestore
-    const stationsSnapshot = await getDocs(collection(DB, "stations"));
+    // Get all stations from Firestore with cron secret
+    const stationsSnapshot = await getDocs(collection(DB, "stations"), {
+      headers: {
+        cron_secret: process.env.CRON_SECRET
+      }
+    });
     const stations = stationsSnapshot.docs.map((doc) => ({
       ...doc.data(),
       id: doc.id,

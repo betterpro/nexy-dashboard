@@ -10,6 +10,7 @@ import Divider from "@/theme/divider";
 import NumberField from "@/theme/numberField";
 import TextAreaField from "@/theme/textareaField";
 import DateField from "@/theme/dateField";
+import TimezoneField from "@/theme/timezoneField";
 import { DB } from "@/firebase";
 import { formList } from "@/app/stations/formList";
 import withRoleAuth from "@/components/context/withRoleAuth";
@@ -196,9 +197,45 @@ function EditStation({ params }) {
                       value={item.value}
                     />
                   )}
+                  {item.type === "timezone" && (
+                    <TimezoneField
+                      register={register}
+                      title={item.title}
+                      value={item.value}
+                    />
+                  )}
                   {item.type === "divider" && <Divider title={item.title} />}
                 </React.Fragment>
               ))}
+            </div>
+          </div>
+
+          {/* Agreement Section */}
+          <div className="p-6.5 border-b border-stroke dark:border-strokedark">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Agreement Information
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <TextField
+                register={register}
+                title="Agreement ID"
+                value="agreementId"
+              />
+              <TextField
+                register={register}
+                title="Partner Name"
+                value="partnerName"
+              />
+              <TextField
+                register={register}
+                title="Partner Email"
+                value="partnerEmail"
+              />
+              <TextField
+                register={register}
+                title="Partner Phone"
+                value="partnerPhone"
+              />
             </div>
           </div>
 

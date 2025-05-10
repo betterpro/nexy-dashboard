@@ -4,6 +4,7 @@ export const formList = [
   { title: "Title", type: "text", value: "stationTitle" },
   { title: "Sub Title", type: "text", value: "stationSubTitle" },
   { title: "Address", type: "text", value: "address" },
+  { title: "Timezone", type: "timezone", value: "timezone" },
   { title: "Instagram", type: "text", value: "instagram" },
   { title: "Twitter", type: "text", value: "twitter" },
   { title: "Tiktok", type: "text", value: "tiktok" },

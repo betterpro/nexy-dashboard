@@ -7,6 +7,7 @@ import Divider from "@/theme/divider";
 import NumberField from "@/theme/numberField";
 import TextAreaField from "@/theme/textareaField";
 import DateField from "@/theme/dateField";
+import TimezoneField from "@/theme/timezoneField";
 import { formList } from "@/app/stations/formList";
 import {
   GeoPoint,
@@ -101,6 +102,11 @@ function AddStation() {
 
   const onSubmit = async (data) => {
     try {
+      // Set default timezone if not provided
+      if (!data.timezone) {
+        data.timezone = 'America/Vancouver'; // Default timezone
+      }
+
       // Upload logo to Firebase Storage and get the URL
       let logoURL = "";
       if (logoFile) {
@@ -166,6 +172,7 @@ function AddStation() {
       setValue("phone", place?.formatted_phone_number ?? "");
       setValue("stationTitle", place?.name ?? "");
       setValue("website", place?.website ?? "");
+      setValue("timezone", place?.utc_offset ?? "");
 
       // Fetch images when a place is selected
       if (place.place_id) {
@@ -377,6 +384,13 @@ function AddStation() {
                   )}
                   {item.type === "date" && (
                     <DateField
+                      register={register}
+                      title={item.title}
+                      value={item.value}
+                    />
+                  )}
+                  {item.type === "timezone" && (
+                    <TimezoneField
                       register={register}
                       title={item.title}
                       value={item.value}

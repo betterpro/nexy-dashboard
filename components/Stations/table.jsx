@@ -1,13 +1,20 @@
 "use client";
 import axios from "axios";
 import Link from "next/link";
-import { useState } from "react";
-import { deleteDoc, doc, updateDoc } from "firebase/firestore"; // Import Firebase functions
+import { useState, useEffect } from "react";
+import { deleteDoc, doc, updateDoc, getDoc, collection } from "firebase/firestore"; // Import Firebase functions
 import { DB } from "@/firebase"; // Import your Firebase config
 import { Icon } from "@iconify/react/dist/iconify.js";
 import { useAuth } from "@/components/context/AuthContext";
 import { ROLES } from "@/components/context/roles";
 import { getBatteryStatus } from "@/utils/batteryStatus";
+import { 
+  timeZones, 
+  isStationOpen,
+  formatOperatingHours,
+  getDayOfWeekInTimezone,
+  getCurrentTimeInTimezone
+} from "@/utils/timezone";
 
 const handleShowAsPartnerToggle = async (stationId, currentValue) => {
   try {
@@ -31,13 +38,14 @@ const StationsTable = (Props) => {
   const [stationData, setStationData] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [deleteStationId, setDeleteStationId] = useState(null);
+  const { userRole } = useAuth();
+  const [agreementData, setAgreementData] = useState({});
 
   const [stationStatus, setStationStatus] = useState({
     stationId: "",
     status: "",
     batteries: 0,
   });
-  const { userRole } = useAuth();
 
   const handleUpdateClick = async (stationId) => {
     const data = await getBatteryStatus(stationId)
@@ -104,6 +112,33 @@ const StationsTable = (Props) => {
       }
     }
   };
+
+  // Add function to fetch agreement data
+  const fetchAgreementData = async (agreementId) => {
+    if (!agreementId) return;
+    try {
+      const agreementRef = doc(DB, "partnershipAgreements", agreementId);
+      const agreementDoc = await getDoc(agreementRef);
+      if (agreementDoc.exists()) {
+        setAgreementData(prev => ({
+          ...prev,
+          [agreementId]: agreementDoc.data()
+        }));
+      }
+    } catch (error) {
+      console.error("Error fetching agreement data:", error);
+    }
+  };
+
+  // Modify useEffect to fetch agreement data when stations change
+  useEffect(() => {
+    Props.stations.forEach(station => {
+      if (station.agreementId) {
+        fetchAgreementData(station.agreementId);
+      }
+    });
+  }, [Props.stations]);
+
   console.log(stationData);
   return (
     <div className="rounded-sm ">
@@ -120,9 +155,11 @@ const StationsTable = (Props) => {
               <th className="min-w-[50px] py-4 px-4 font-medium text-black dark:text-white xl:pl-11">
                 Status
               </th>
-
               <th className="min-w-[50px] py-4 px-4 font-medium text-black dark:text-white">
                 Email
+              </th>
+              <th className="py-4 px-4 font-medium text-black dark:text-white">
+                Timezone
               </th>
               <th className="py-4 px-4 font-medium text-black dark:text-white">
                 Actions{" "}
@@ -133,95 +170,210 @@ const StationsTable = (Props) => {
             </tr>
           </thead>
           <tbody>
-            {Props.stations.map((packageItem, key) => (
-              <tr
-                key={key}
-                className={`${
-                  stationStatus.stationId === packageItem.stationId
-                    ? stationStatus.status === "online"
-                      ? "bg-success"
-                      : "bg-danger"
-                    : ""
-                }`}
-              >
-                <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                  <img
-                    src={
-                      packageItem.logo !== ""
-                        ? packageItem.logo
-                        : "/images/favicon.ico"
-                    }
-                    className="rounded-full h-14 w-14"
-                  />
-                </td>
-                <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                  <p>{packageItem.stationId}</p>
-                  <p>{packageItem.stationTitle}</p>
-                </td>
+            {Props.stations.map((packageItem, key) => {
+              const isOpen = isStationOpen(packageItem);
+              
+              return (
+                <tr
+                  key={key}
+                  className={`${
+                    stationStatus.stationId === packageItem.stationId
+                      ? stationStatus.status === "online"
+                        ? "bg-success"
+                        : "bg-danger"
+                      : ""
+                  }`}
+                >
+                  <td className="border-b border-[#eee] py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                    <img
+                      src={
+                        packageItem.logo !== ""
+                          ? packageItem.logo
+                          : "/images/favicon.ico"
+                      }
+                      className="rounded-full h-14 w-14"
+                    />
+                  </td>
+                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                    <p>{packageItem.stationId}</p>
+                    <p>{packageItem.stationTitle}</p>
+                  </td>
 
-                <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                  <p>
-                    PowerBank: {packageItem.powerBank}
-                    {stationStatus.batteries > 0 &&
-                      stationStatus.stationId === packageItem.stationId &&
-                      stationStatus.status === "online" && (
-                        <span className="font-bold ml-2 text-danger">
-                          {stationStatus.batteries}
-                        </span>
-                      )}
-                    {stationStatus.stationId === packageItem.stationId &&
-                      stationStatus.status === "offline" && (
-                        <span className="font-bold ml-2 text-black">
-                          Offline
-                        </span>
-                      )}
-                  </p>
-                  <p>Parking: {packageItem.parking}</p>
-                  <p>Price: {packageItem.price}</p>
-                </td>
+                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                    <p>
+                      PowerBank: {packageItem.powerBank}
+                      {stationStatus.batteries > 0 &&
+                        stationStatus.stationId === packageItem.stationId &&
+                        stationStatus.status === "online" && (
+                          <span className="font-bold ml-2 text-danger">
+                            {stationStatus.batteries}
+                          </span>
+                        )}
+                      {stationStatus.stationId === packageItem.stationId &&
+                        stationStatus.status === "offline" && (
+                          <span className="font-bold ml-2 text-black">
+                            Offline
+                          </span>
+                        )}
+                    </p>
+                    <p>Parking: {packageItem.parking}</p>
+                    <p>Price: {packageItem.price}</p>
+                    <p
+                      className={`mt-1 ${
+                        isOpen ? "text-success" : "text-danger"
+                      }`}
+                    >
+                      {isOpen ? "Currently Open" : "Currently Closed"}
+                      {(() => {
+                        const timezone =
+                          packageItem.timezone || "America/Vancouver";
+                        const now = new Date();
+                        const dayOfWeek = getDayOfWeekInTimezone(now, timezone);
+                        const dayMap = {
+                          0: "su",
+                          1: "mo",
+                          2: "tu",
+                          3: "we",
+                          4: "th",
+                          5: "fr",
+                          6: "sa",
+                        };
+                        const dayCode = dayMap[dayOfWeek];
+                        const startTime =
+                          packageItem[`${dayCode}Start`] || "08:00";
+                        const endTime = packageItem[`${dayCode}End`] || "20:00";
+                        return ` (${formatOperatingHours(startTime, endTime)})`;
+                      })()}
+                    </p>
+                  </td>
 
-                <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                  <p>{packageItem?.owner?.email}</p>
-                  <p>{packageItem?.owner?.phoneNumber}</p>
-                  <p>{packageItem?.owner?.partnerName}</p>
-                </td>
-                <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
-                  <div className="flex gap-5 items-center space-x-3">
-                    <Link href={`/stations/${packageItem.stationId}`}>
-                      <Icon icon="basil:edit-outline" height={20} />
-                    </Link>
-                    {userRole === ROLES.SUPER_ADMIN && (
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          checked={packageItem.showAsPartner}
-                          onChange={() =>
-                            handleShowAsPartnerToggle(
-                              packageItem.stationId,
-                              packageItem.showAsPartner
-                            )
-                          }
-                          className="cursor-pointer"
-                        />
-                        <label className="ml-2">Show as Partner</label>
-                      </div>
+                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                    {packageItem?.agreementId && (
+                      <p>
+                        Agreement: {packageItem.agreementId}
+                        {agreementData[packageItem.agreementId] && (
+                          <>
+                            <br />
+                            <span className="text-gray-500">
+                              {agreementData[packageItem.agreementId]
+                                .partnerName &&
+                                `Partner: ${
+                                  agreementData[packageItem.agreementId]
+                                    .partnerName
+                                }`}
+                            </span>
+                            <br />
+                            <span className="text-gray-500">
+                              {agreementData[packageItem.agreementId].email &&
+                                `Email: ${
+                                  agreementData[packageItem.agreementId].email
+                                }`}
+                            </span>
+                            <br />
+                            <span className="text-gray-500">
+                              {agreementData[packageItem.agreementId].phone &&
+                                `Phone: ${
+                                  agreementData[packageItem.agreementId].phone
+                                }`}
+                            </span>
+                           
+                            <span className="text-gray-500">
+                              {agreementData[packageItem.agreementId]
+                                .revenueShare &&
+                                `Revenue Share: ${
+                                  agreementData[packageItem.agreementId]
+                                    .revenueShare
+                                }`}
+                            </span>
+                            <br />
+                            <span className="text-gray-500">
+                              {agreementData[packageItem.agreementId]
+                                .depositAmount &&
+                                `Deposit: ${
+                                  agreementData[packageItem.agreementId]
+                                    .depositAmount
+                                }`}
+                            </span>
+                          </>
+                        )}
+                      </p>
                     )}
-                    <button
-                      onClick={() => handleUpdateClick(packageItem.stationId)}
-                      className="hover:text-primary"
-                    >
-                      <Icon height={20} icon="fluent-mdl2:sync-status" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteClick(packageItem.stationId)}
-                      className="text-danger"
-                    >
-                      <Icon icon="fluent:delete-20-regular" height={20} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+                    {!packageItem?.agreementId && (
+                      <>
+                        {(packageItem?.partnerName ||
+                          packageItem?.owner?.partnerName) && (
+                          <p>
+                            Partner:{" "}
+                            {packageItem?.partnerName ||
+                              packageItem?.owner?.partnerName}
+                          </p>
+                        )}
+                        {(packageItem?.partnerEmail ||
+                          packageItem?.owner?.email) && (
+                          <p>
+                            Email:{" "}
+                            {packageItem?.partnerEmail ||
+                              packageItem?.owner?.email}
+                          </p>
+                        )}
+                        {(packageItem?.phoneNumber ||
+                          packageItem?.owner?.phoneNumber) && (
+                          <p>
+                            Phone:{" "}
+                            {packageItem?.phoneNumber ||
+                              packageItem?.owner?.phoneNumber}
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </td>
+                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                    {timeZones.find(
+                      (tz) =>
+                        tz.value ===
+                        (packageItem.timezone || "America/Vancouver")
+                    )?.label ||
+                      packageItem.timezone ||
+                      "America/Vancouver"}
+                  </td>
+                  <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">
+                    <div className="flex gap-5 items-center space-x-3">
+                      <Link href={`/stations/${packageItem.stationId}`}>
+                        <Icon icon="basil:edit-outline" height={20} />
+                      </Link>
+                      {userRole === ROLES.SUPER_ADMIN && (
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={packageItem.showAsPartner}
+                            onChange={() =>
+                              handleShowAsPartnerToggle(
+                                packageItem.stationId,
+                                packageItem.showAsPartner
+                              )
+                            }
+                            className="cursor-pointer"
+                          />
+                          <label className="ml-2">Show as Partner</label>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => handleUpdateClick(packageItem.stationId)}
+                        className="hover:text-primary"
+                      >
+                        <Icon height={20} icon="fluent-mdl2:sync-status" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteClick(packageItem.stationId)}
+                        className="text-danger"
+                      >
+                        <Icon icon="fluent:delete-20-regular" height={20} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
