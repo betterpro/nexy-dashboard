@@ -6,12 +6,12 @@ import { createClient } from "redis";
 let redisClient = null;
 
 async function getRedisClient() {
-  if (!process.env.NEXT_PUBLIC_REDIS_API) {
+  if (!process.env.REDIS_API) {
     throw new Error("Redis configuration is missing");
   }
 
   if (!redisClient) {
-    redisClient = createClient({ url: process.env.NEXT_PUBLIC_REDIS_API });
+    redisClient = createClient({ url: process.env.REDIS_API });
     redisClient.on("error", (err) => console.error("Redis Client Error", err));
     await redisClient.connect();
   }
@@ -50,8 +50,8 @@ export async function GET(request) {
 
     if (stationId.startsWith("ZAPP") || stationId.startsWith("WSEP")) {
       if (
-        !process.env.NEXT_PUBLIC_ZAPP_API_URL ||
-        !process.env.NEXT_PUBLIC_ZAPP_USERNAME
+        !process.env.ZAPP_API_URL ||
+        !process.env.ZAPP_USERNAME
       ) {
         return NextResponse.json(
           { error: "ZAPP API configuration is missing" },
@@ -61,18 +61,18 @@ export async function GET(request) {
 
       // Fetch battery data for ZAPP station
       const awsRes = await axios.get(
-        `${process.env.NEXT_PUBLIC_ZAPP_API_URL}/v1/station/${stationId}`,
+        `${process.env.ZAPP_API_URL}/v1/station/${stationId}`,
         {
           headers: {
-            Authorization: `Bearer ${process.env.NEXT_PUBLIC_ZAPP_USERNAME}`,
+            Authorization: `Bearer ${process.env.ZAPP_USERNAME}`,
           },
         }
       );
       batteries = awsRes.data.batteries;
     } else if (stationId.startsWith("NEXY")) {
       if (
-        !process.env.NEXT_PUBLIC_NEXY_API_URL ||
-        !process.env.NEXT_PUBLIC_NEXY_API_TOKEN
+        !process.env.NEXY_API_URL ||
+        !process.env.NEXY_API_TOKEN
       ) {
         return NextResponse.json(
           { error: "NEXY API configuration is missing" },
@@ -83,12 +83,12 @@ export async function GET(request) {
       try {
         // Fetch from Nexy API
         const nexyApiRes = await axios.get(
-          process.env.NEXT_PUBLIC_NEXY_API_URL,
+          process.env.NEXY_API_URL,
           {
             params: {
               I: 64,
               E: stationId,
-              token: process.env.NEXT_PUBLIC_NEXY_API_TOKEN,
+              token: process.env.NEXY_API_TOKEN,
             },
           }
         );

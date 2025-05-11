@@ -139,7 +139,7 @@ const StationsTable = (Props) => {
     });
   }, [Props.stations]);
 
-  console.log(stationData);
+  console.log('table',stationData);
   return (
     <div className="rounded-sm ">
       <div className="max-w-full overflow-x-auto">

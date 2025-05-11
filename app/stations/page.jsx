@@ -13,17 +13,19 @@ const Stations = () => {
   const { user, userRole } = useAuth();
 
   useEffect(() => {
+    console.log("user",user);
     const fetchStations = async () => {
       try {
         setLoading(true);
         let stationsQuery;
 
         // Create base query
-        if (userRole === ROLES.SUPER_ADMIN) {
+        if (user.role === "superadmin") {
           // Super admin can see all stations
           stationsQuery = query(collection(DB, "stations"));
-        } else if (userRole === ROLES.FRANCHISEE) {
+        } else if (user.role === "franchisee") {
           // Franchisee can only see their own stations
+          console.log("franchiseeId",user?.franchiseeId);
           stationsQuery = query(
             collection(DB, "stations"),
             where("franchiseeId", "==", user?.franchiseeId)
@@ -33,6 +35,7 @@ const Stations = () => {
         const querySnapshot = await getDocs(stationsQuery);
         const stationsData = querySnapshot.docs.map((doc) => {
           const data = doc.data();
+          console.log("franchiseeId",user?.franchiseeId, data);
           // Ensure each station has default timezone and operating hours if not set
           return {
             id: doc.id,
