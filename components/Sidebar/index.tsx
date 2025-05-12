@@ -102,12 +102,12 @@ const menuCategories: MenuCategory[] = [
         icon: "mdi:report-line-shimmer",
         roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
       },
-      // {
-      //   title: "Release",
-      //   path: "/release",
-      //   icon: "ion:log-out-sharp",
-      //   roles: [ROLES.SUPER_ADMIN],
-      // },
+      {
+        title: "Release",
+        path: "/release",
+        icon: "ion:log-out-sharp",
+        roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
+      },
     ],
   },
   {
@@ -123,6 +123,7 @@ const menuCategories: MenuCategory[] = [
       },
     ],
   },
+ 
 ];
 
 interface SidebarProps {
