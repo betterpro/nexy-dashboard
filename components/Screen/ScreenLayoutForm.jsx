@@ -355,7 +355,7 @@ const ScreenLayoutForm = ({ layout, onSave, saving, stationId }) => {
               />
               <p>No assets added yet</p>
               <p className="text-sm">
-                Click "Add Asset" and upload a file to get started
+                Click &quot;Add Asset&quot; and upload a file to get started
               </p>
             </div>
           )}
@@ -401,7 +401,7 @@ const ScreenLayoutForm = ({ layout, onSave, saving, stationId }) => {
               />
               <p>No assets added yet</p>
               <p className="text-sm">
-                Click "Add Asset" and upload a file to get started
+                Click &quot;Add Asset&quot; and upload a file to get started
               </p>
             </div>
           )}

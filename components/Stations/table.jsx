@@ -192,6 +192,7 @@ const StationsTable = (Props) => {
                           : "/images/favicon.ico"
                       }
                       className="rounded-full h-14 w-14"
+                      alt={`${packageItem.stationTitle} logo`}
                     />
                   </td>
                   <td className="border-b border-[#eee] font-normal text-xs py-5 px-4 pl-9 dark:border-strokedark xl:pl-11">

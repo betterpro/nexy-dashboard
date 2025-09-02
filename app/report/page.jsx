@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { DB } from "@/firebase";
 import TableList from "./Table";
@@ -82,10 +82,10 @@ function NexyDashboard() {
     };
 
     fetchStations();
-  }, [userRole, user?.uid]);
+  }, [userRole, user?.uid, user?.franchiseeId]);
 
   // Fetch Rents Collection based on Selected Station ID
-  const fetchRents = async () => {
+  const fetchRents = useCallback(async () => {
     try {
       setLoading(true);
       const rentsCollection = collection(DB, "rents");
@@ -112,7 +112,7 @@ function NexyDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedStationId]);
 
   useEffect(() => {
     if (!selectedStationId) return;
@@ -158,7 +158,7 @@ function NexyDashboard() {
   };
 
   // Fetch chart data
-  const fetchChartData = async () => {
+  const fetchChartData = useCallback(async () => {
     try {
       const rentsCollection = collection(DB, "rents");
       const rentsQuery = query(
@@ -220,7 +220,7 @@ function NexyDashboard() {
     } catch (error) {
       console.error("Error fetching chart data:", error);
     }
-  };
+  }, [selectedStationId, totalRevenue]);
 
   useEffect(() => {
     if (selectedStationId) {
@@ -366,6 +366,7 @@ function NexyDashboard() {
                           : "/images/favicon.ico"
                       }
                       className="rounded-full h-10 w-10"
+                      alt={`${station.stationTitle} logo`}
                     />
                     <div>
                       <p className="font-medium text-black dark:text-white">

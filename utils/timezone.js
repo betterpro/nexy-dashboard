@@ -1,18 +1,18 @@
-import { formatInTimeZone, zonedTimeToUtc, toZonedTime } from 'date-fns-tz';
-import { zones } from 'tzdata';
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
+import timezoneData from "tzdata";
 
 // Get all timezones and format them for display
-export const timeZones = Object.keys(zones)
-  .filter(zone => zone && typeof zone === 'string') // Filter out invalid timezones
-  .map(zone => {
+export const timeZones = Object.keys(timezoneData.zones)
+  .filter((zone) => zone && typeof zone === "string") // Filter out invalid timezones
+  .map((zone) => {
     try {
       const now = new Date();
-      const offset = formatInTimeZone(now, zone, 'xxx'); // Format like "+07:00"
-      const city = zone.split('/').pop().replace(/_/g, ' ');
+      const offset = formatInTimeZone(now, zone, "xxx"); // Format like "+07:00"
+      const city = zone.split("/").pop().replace(/_/g, " ");
       return {
         value: zone,
         label: `(GMT${offset}) ${city}`,
-        offset
+        offset,
       };
     } catch (error) {
       console.warn(`Invalid timezone: ${zone}`, error);
@@ -22,8 +22,8 @@ export const timeZones = Object.keys(zones)
   .filter(Boolean) // Remove any null entries from failed timezone formatting
   .sort((a, b) => {
     // Sort by offset first
-    const offsetA = parseInt(a.offset.replace(':', ''));
-    const offsetB = parseInt(b.offset.replace(':', ''));
+    const offsetA = parseInt(a.offset.replace(":", ""));
+    const offsetB = parseInt(b.offset.replace(":", ""));
     if (offsetA !== offsetB) return offsetA - offsetB;
     // Then by city name
     return a.label.localeCompare(b.label);
@@ -31,58 +31,83 @@ export const timeZones = Object.keys(zones)
 
 // Get timezones for a specific region
 export const getTimezonesByRegion = (region) => {
-  return timeZones.filter(zone => zone.value.startsWith(region));
+  return timeZones.filter((zone) => zone.value.startsWith(region));
 };
 
 // Get timezones for a specific country
 export const getTimezonesByCountry = (countryCode) => {
   const countryZones = {
-    'CA': ['America/Vancouver', 'America/Edmonton', 'America/Winnipeg', 'America/Toronto', 'America/Halifax', 'America/St_Johns'],
-    'US': ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu'],
+    CA: [
+      "America/Vancouver",
+      "America/Edmonton",
+      "America/Winnipeg",
+      "America/Toronto",
+      "America/Halifax",
+      "America/St_Johns",
+    ],
+    US: [
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Los_Angeles",
+      "America/Anchorage",
+      "Pacific/Honolulu",
+    ],
     // Add more countries as needed
   };
-  return timeZones.filter(zone => countryZones[countryCode]?.includes(zone.value));
+  return timeZones.filter((zone) =>
+    countryZones[countryCode]?.includes(zone.value)
+  );
 };
 
 // Format a date in a specific timezone
-export const formatInTimezone = (date, timezone, format = 'yyyy-MM-dd HH:mm:ss') => {
+export const formatInTimezone = (
+  date,
+  timezone,
+  format = "yyyy-MM-dd HH:mm:ss"
+) => {
   try {
-    const safeTimezone = timezone || 'America/Vancouver';
+    const safeTimezone = timezone || "America/Vancouver";
     return formatInTimeZone(date, safeTimezone, format);
   } catch (error) {
     console.warn(`Error formatting date in timezone ${timezone}:`, error);
-    return formatInTimeZone(date, 'America/Vancouver', format);
+    return formatInTimeZone(date, "America/Vancouver", format);
   }
 };
 
 // Convert a local time to UTC
 export const localToUTC = (date, timezone) => {
   try {
-    const safeTimezone = timezone || 'America/Vancouver';
-    return zonedTimeToUtc(date, safeTimezone);
+    const safeTimezone = timezone || "America/Vancouver";
+    // For date-fns-tz v3, we need to use a different approach
+    // Convert the date to the timezone first, then get the UTC equivalent
+    const zonedDate = toZonedTime(date, safeTimezone);
+    return new Date(
+      zonedDate.getTime() - zonedDate.getTimezoneOffset() * 60000
+    );
   } catch (error) {
     console.warn(`Error converting to UTC for timezone ${timezone}:`, error);
-    return zonedTimeToUtc(date, 'America/Vancouver');
+    return date; // Return original date as fallback
   }
 };
 
 // Convert UTC to local time
 export const utcToLocal = (date, timezone) => {
   try {
-    const safeTimezone = timezone || 'America/Vancouver';
+    const safeTimezone = timezone || "America/Vancouver";
     return toZonedTime(date, safeTimezone);
   } catch (error) {
     console.warn(`Error converting from UTC for timezone ${timezone}:`, error);
-    return toZonedTime(date, 'America/Vancouver');
+    return toZonedTime(date, "America/Vancouver");
   }
 };
 
 // Parse time string in HH:mm format to hours
 const parseTimeString = (timeStr) => {
-  if (!timeStr || timeStr === '') return null; // Return null for empty strings
+  if (!timeStr || timeStr === "") return null; // Return null for empty strings
   try {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    return hours + (minutes / 60); // Convert to decimal hours for more precise comparison
+    const [hours, minutes] = timeStr.split(":").map(Number);
+    return hours + minutes / 60; // Convert to decimal hours for more precise comparison
   } catch (error) {
     console.warn(`Error parsing time string ${timeStr}:`, error);
     return null; // Return null on error
@@ -92,9 +117,9 @@ const parseTimeString = (timeStr) => {
 // Check if a time is within operating hours for a specific timezone
 export const isWithinOperatingHours = (date, timezone, startTime, endTime) => {
   try {
-    const safeTimezone = timezone || 'America/Vancouver';
+    const safeTimezone = timezone || "America/Vancouver";
     const localTime = utcToLocal(date, safeTimezone);
-    const currentHour = localTime.getHours() + (localTime.getMinutes() / 60); // Convert to decimal hours
+    const currentHour = localTime.getHours() + localTime.getMinutes() / 60; // Convert to decimal hours
     const startHour = parseTimeString(startTime);
     const endHour = parseTimeString(endTime);
 
@@ -109,11 +134,14 @@ export const isWithinOperatingHours = (date, timezone, startTime, endTime) => {
       // If current time is after midnight, check if it's before end time
       return currentHour >= startHour || currentHour < endHour;
     }
-    
+
     // Normal case (same day)
     return currentHour >= startHour && currentHour < endHour;
   } catch (error) {
-    console.warn(`Error checking operating hours for timezone ${timezone}:`, error);
+    console.warn(
+      `Error checking operating hours for timezone ${timezone}:`,
+      error
+    );
     return false;
   }
 };
@@ -121,11 +149,11 @@ export const isWithinOperatingHours = (date, timezone, startTime, endTime) => {
 // Get current time in a specific timezone
 export const getCurrentTimeInTimezone = (timezone) => {
   try {
-    const safeTimezone = timezone || 'America/Vancouver';
+    const safeTimezone = timezone || "America/Vancouver";
     return utcToLocal(new Date(), safeTimezone);
   } catch (error) {
     console.warn(`Error getting current time for timezone ${timezone}:`, error);
-    return utcToLocal(new Date(), 'America/Vancouver');
+    return utcToLocal(new Date(), "America/Vancouver");
   }
 };
 
@@ -133,15 +161,15 @@ export const getCurrentTimeInTimezone = (timezone) => {
 export const formatOperatingHours = (startTime, endTime) => {
   try {
     // If either time is empty, return "Closed"
-    if (!startTime || !endTime || startTime === '' || endTime === '') {
-      return 'Closed';
+    if (!startTime || !endTime || startTime === "" || endTime === "") {
+      return "Closed";
     }
 
     const formatTime = (timeStr) => {
-      const [hours, minutes] = timeStr.split(':').map(Number);
-      const period = hours >= 12 ? 'PM' : 'AM';
+      const [hours, minutes] = timeStr.split(":").map(Number);
+      const period = hours >= 12 ? "PM" : "AM";
       const displayHour = hours % 12 || 12;
-      return `${displayHour}:${minutes.toString().padStart(2, '0')} ${period}`;
+      return `${displayHour}:${minutes.toString().padStart(2, "0")} ${period}`;
     };
 
     const startHour = parseTimeString(startTime);
@@ -149,7 +177,7 @@ export const formatOperatingHours = (startTime, endTime) => {
 
     // If either time is null, return "Closed"
     if (startHour === null || endHour === null) {
-      return 'Closed Today';
+      return "Closed Today";
     }
 
     // If end time is less than start time, it means it's the next day
@@ -160,14 +188,14 @@ export const formatOperatingHours = (startTime, endTime) => {
     return `${formatTime(startTime)} - ${formatTime(endTime)}`;
   } catch (error) {
     console.warn(`Error formatting operating hours:`, error);
-    return 'Closed'; // Return "Closed" on error
+    return "Closed"; // Return "Closed" on error
   }
 };
 
 // Get day of week in a specific timezone
 export const getDayOfWeekInTimezone = (date, timezone) => {
   try {
-    const safeTimezone = timezone || 'America/Vancouver';
+    const safeTimezone = timezone || "America/Vancouver";
     const localDate = utcToLocal(date, safeTimezone);
     return localDate.getDay(); // 0 = Sunday, 1 = Monday, etc.
   } catch (error) {
@@ -180,32 +208,32 @@ export const getDayOfWeekInTimezone = (date, timezone) => {
 export const isStationOpen = (station) => {
   try {
     const now = new Date();
-    const timezone = station?.timezone || 'America/Vancouver';
+    const timezone = station?.timezone || "America/Vancouver";
     const dayOfWeek = getDayOfWeekInTimezone(now, timezone);
-    
+
     // Map day index to day code
     const dayMap = {
-      0: 'su',
-      1: 'mo',
-      2: 'tu',
-      3: 'we',
-      4: 'th',
-      5: 'fr',
-      6: 'sa'
+      0: "su",
+      1: "mo",
+      2: "tu",
+      3: "we",
+      4: "th",
+      5: "fr",
+      6: "sa",
     };
-    
+
     const dayCode = dayMap[dayOfWeek];
     const startTime = station?.[`${dayCode}Start`];
     const endTime = station?.[`${dayCode}End`];
-    
+
     // If either time is empty or undefined, the station is closed
-    if (!startTime || !endTime || startTime === '' || endTime === '') {
+    if (!startTime || !endTime || startTime === "" || endTime === "") {
       return false;
     }
-    
+
     return isWithinOperatingHours(now, timezone, startTime, endTime);
   } catch (error) {
-    console.warn('Error checking if station is open:', error);
+    console.warn("Error checking if station is open:", error);
     return false;
   }
-}; 
+};
