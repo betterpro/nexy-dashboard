@@ -1,6 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
-import { collection, getDocs, query, where, doc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  doc,
+  updateDoc,
+} from "firebase/firestore";
 import { DB } from "@/firebase";
 import { toast } from "react-toastify";
 import { useAuth } from "@/components/context/AuthContext";
@@ -21,13 +28,28 @@ function ReleasePowerBankPage() {
     const fetchStations = async () => {
       let q;
       if (userRole === ROLES.FRANCHISEE) {
-        q = query(collection(DB, "stations"), where("franchiseeId", "==", user?.franchiseeId));
+        // Check if franchiseeId exists and is not undefined
+        if (!user?.franchiseeId) {
+          console.error("Franchisee user missing franchiseeId:", user);
+          setStations([]);
+          return;
+        }
+        q = query(
+          collection(DB, "stations"),
+          where("franchiseeId", "==", user.franchiseeId)
+        );
       } else {
         q = query(collection(DB, "stations"));
       }
       const snap = await getDocs(q);
       setStations(snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
     };
+
+    // Don't fetch stations if user is not loaded yet
+    if (!user || !userRole) {
+      return;
+    }
+
     fetchStations();
   }, [userRole, user?.franchiseeId]);
 
@@ -39,18 +61,19 @@ function ReleasePowerBankPage() {
     }
     const fetchBatteries = async () => {
       try {
-        const res = await fetch(`/api/battery/status?stationId=${encodeURIComponent(selectedStation)}`);
+        const res = await fetch(
+          `/api/battery/status?stationId=${encodeURIComponent(selectedStation)}`
+        );
         if (!res.ok) {
-           throw new Error("Failed to fetch battery status");
+          throw new Error("Failed to fetch battery status");
         }
         const { batteries: batteryData } = await res.json();
-        console.log(batteryData)
+        console.log(batteryData);
         setBatteries(batteryData);
-       
       } catch (err) {
-         console.error("Error fetching battery status:", err);
-         toast.error("Failed to fetch battery status");
-         setBatteries([]);
+        console.error("Error fetching battery status:", err);
+        toast.error("Failed to fetch battery status");
+        setBatteries([]);
       }
     };
     fetchBatteries();
@@ -62,14 +85,14 @@ function ReleasePowerBankPage() {
       toast.error("Please fill all fields");
       return;
     }
-const getAuthHeader = () => {
-  const username = "ec0f42a52f81ac228c673ed51d0f0421";
-  const password = "";
-  const base64Credentials = btoa(`${username}:${password}`);
-  return {
-    Authorization: `Basic ${base64Credentials}`,
-  };
-};
+    const getAuthHeader = () => {
+      const username = "ec0f42a52f81ac228c673ed51d0f0421";
+      const password = "";
+      const base64Credentials = btoa(`${username}:${password}`);
+      return {
+        Authorization: `Basic ${base64Credentials}`,
+      };
+    };
     setLoading(true);
     console.log(selectedStation, selectedBattery.slot_id, selectedBattery);
     try {
@@ -133,7 +156,7 @@ const getAuthHeader = () => {
             value={selectedBattery ? selectedBattery.battery_id : ""}
             onChange={(e) => {
               const batteryId = e.target.value;
-              const battery = batteries.find(b => b.battery_id === batteryId);
+              const battery = batteries.find((b) => b.battery_id === batteryId);
               setSelectedBattery(battery);
             }}
             required
@@ -147,7 +170,7 @@ const getAuthHeader = () => {
             ))}
           </select>
         </div>
-       
+
         <button
           type="submit"
           className="w-full py-2 px-4 bg-primary text-white rounded hover:bg-primary-dark disabled:opacity-50"
@@ -160,4 +183,8 @@ const getAuthHeader = () => {
   );
 }
 
-export default withRoleAuth(ReleasePowerBankPage, [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE, ROLES.PARTNER]); 
+export default withRoleAuth(ReleasePowerBankPage, [
+  ROLES.SUPER_ADMIN,
+  ROLES.FRANCHISEE,
+  ROLES.PARTNER,
+]);

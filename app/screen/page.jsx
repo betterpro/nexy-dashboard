@@ -3,12 +3,12 @@ import { useEffect, useState } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { DB } from "@/firebase";
 import Breadcrumb from "@/components/Breadcrumbs/Breadcrumb";
-import StationsTable from "@/components/Stations/table";
+import ScreenTable from "@/components/Screen/ScreenTable";
 import { useAuth } from "@/components/context/AuthContext";
 import { ROLES } from "@/components/context/roles";
 import withRoleAuth from "@/components/context/withRoleAuth";
 
-const Stations = () => {
+const Screen = () => {
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
   const { user, userRole } = useAuth();
@@ -29,7 +29,7 @@ const Stations = () => {
         // Create base query
         if (user.role === "superadmin") {
           // Super admin can see all stations
-          stationsQuery = query(collection(DB, "stations"));
+          stationsQuery = query(collection(DB, "Stations"));
         } else if (user.role === "franchisee") {
           // Franchisee can only see their own stations
           console.log("franchiseeId", user?.franchiseeId);
@@ -43,7 +43,7 @@ const Stations = () => {
           }
 
           stationsQuery = query(
-            collection(DB, "stations"),
+            collection(DB, "Stations"),
             where("franchiseeId", "==", user.franchiseeId)
           );
         }
@@ -60,26 +60,20 @@ const Stations = () => {
         const stationsData = querySnapshot.docs.map((doc) => {
           const data = doc.data();
           console.log("franchiseeId", user?.franchiseeId, data);
-          // Ensure each station has default timezone and operating hours if not set
           return {
             id: doc.id,
             ...data,
-            timezone: data.timezone || "America/Vancouver", // Default timezone
-            // Default operating hours for each day if not set
-            suStart: data.suStart || 8,
-            suEnd: data.suEnd || 20,
-            moStart: data.moStart || 8,
-            moEnd: data.moEnd || 20,
-            tuStart: data.tuStart || 8,
-            tuEnd: data.tuEnd || 20,
-            weStart: data.weStart || 8,
-            weEnd: data.weEnd || 20,
-            thStart: data.thStart || 8,
-            thEnd: data.thEnd || 20,
-            frStart: data.frStart || 8,
-            frEnd: data.frEnd || 20,
-            saStart: data.saStart || 8,
-            saEnd: data.saEnd || 20,
+            // Ensure layout_json exists with default structure
+            layout_json: data.layout_json || {
+              top: {
+                height: 80,
+                assets: [],
+              },
+              bottom: {
+                height: 20,
+                assets: [],
+              },
+            },
           };
         });
 
@@ -94,37 +88,30 @@ const Stations = () => {
     fetchStations();
   }, [userRole, user?.uid]);
 
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
-        <Breadcrumb pageName="Stations" />
+        <Breadcrumb pageName="Screen Management" />
 
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-title-md2 font-semibold text-black dark:text-white">
-            All Stations
+            Station Screen Layouts
           </h2>
-
-          {userRole === ROLES.SUPER_ADMIN && (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-              <a
-                href="/stations/add"
-                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-8 xl:px-10"
-              >
-                Add Station
-              </a>
-              <a
-                href="/stations/addpartner"
-                className="inline-flex items-center justify-center rounded-md bg-primary py-2 px-4 text-center font-medium text-white hover:bg-opacity-90 lg:px-8 xl:px-10"
-              >
-                Add Partner
-              </a>
-            </div>
-          )}
         </div>
 
         <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
           <div className="max-w-full overflow-x-auto">
-            <StationsTable stations={stations} setStations={setStations} />
+            <ScreenTable stations={stations} setStations={setStations} />
           </div>
         </div>
       </div>
@@ -132,4 +119,4 @@ const Stations = () => {
   );
 };
 
-export default withRoleAuth(Stations, [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE]);
+export default withRoleAuth(Screen, [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE]);

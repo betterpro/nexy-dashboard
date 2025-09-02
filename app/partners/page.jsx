@@ -31,11 +31,27 @@ const PartnersList = () => {
           );
         } else if (userRole === ROLES.FRANCHISEE) {
           // Franchisee can only see partners in their franchise
+          // Check if franchiseeId exists and is not undefined
+          if (!user?.franchiseeId) {
+            console.error("Franchisee user missing franchiseeId:", user);
+            setPartners([]);
+            setIsLoading(false);
+            return;
+          }
+
           partnersQuery = query(
             collection(DB, "users"),
             where("role", "==", "partner"),
-            where("franchiseeId", "==", user?.franchiseeId)
+            where("franchiseeId", "==", user.franchiseeId)
           );
+        }
+
+        // Ensure we have a valid query before proceeding
+        if (!partnersQuery) {
+          console.error("No valid query constructed for user role:", userRole);
+          setPartners([]);
+          setIsLoading(false);
+          return;
         }
 
         const partnersSnapshot = await getDocs(partnersQuery);

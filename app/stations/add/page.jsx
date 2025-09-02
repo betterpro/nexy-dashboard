@@ -14,8 +14,6 @@ import {
   Timestamp,
   doc,
   setDoc,
-  addDoc,
-  collection,
   serverTimestamp,
 } from "firebase/firestore";
 import { DB, storage } from "@/firebase";
@@ -104,7 +102,7 @@ function AddStation() {
     try {
       // Set default timezone if not provided
       if (!data.timezone) {
-        data.timezone = 'America/Vancouver'; // Default timezone
+        data.timezone = "America/Vancouver"; // Default timezone
       }
 
       // Upload logo to Firebase Storage and get the URL

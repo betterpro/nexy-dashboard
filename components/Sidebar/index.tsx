@@ -64,6 +64,12 @@ const menuCategories: MenuCategory[] = [
         icon: "material-symbols-light:add-location-alt",
         roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
       },
+      {
+        title: "Screen",
+        path: "/screen",
+        icon: "material-symbols-light:display-settings-outline",
+        roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
+      },
     ],
   },
   {
@@ -123,7 +129,6 @@ const menuCategories: MenuCategory[] = [
       },
     ],
   },
- 
 ];
 
 interface SidebarProps {

@@ -32,20 +32,42 @@ function NexyDashboard() {
 
   // Fetch Stations Collection from Firestore
   useEffect(() => {
+    // Don't fetch stations if user is not loaded yet
+    if (!user || !userRole) {
+      return;
+    }
+
     let stationsQuery;
 
     if (userRole === ROLES.SUPER_ADMIN) {
       stationsQuery = query(collection(DB, "stations"));
     } else if (userRole === ROLES.FRANCHISEE) {
+      // Check if franchiseeId exists and is not undefined
+      if (!user?.franchiseeId) {
+        console.error("Franchisee user missing franchiseeId:", user);
+        setStations([]);
+        setLoading(false);
+        return;
+      }
+
       stationsQuery = query(
         collection(DB, "stations"),
-        where("franchiseeId", "==", user?.uid)
+        where("franchiseeId", "==", user.franchiseeId)
       );
     }
 
     const fetchStations = async () => {
       try {
         setLoading(true);
+
+        // Ensure we have a valid query before proceeding
+        if (!stationsQuery) {
+          console.error("No valid query constructed for user role:", userRole);
+          setStations([]);
+          setLoading(false);
+          return;
+        }
+
         const stationSnapshot = await getDocs(stationsQuery);
         const stationList = stationSnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -378,6 +400,9 @@ function NexyDashboard() {
               <TableList
                 dataTable={rents.filter((r) => r.usageDuration > 0)}
                 totalRevenue={totalRevenue / 100}
+                stationTitle={
+                  stations.find((s) => s.id === selectedStationId)?.stationTitle
+                }
               />
             ) : (
               <div className="flex h-[200px] items-center justify-center">

@@ -44,6 +44,13 @@ const CreateUser = () => {
         if (userRole === "superadmin") {
           stationsQuery = query(collection(DB, "stations"));
         } else if (userRole === "franchisee") {
+          // Check if franchiseeId exists and is not undefined
+          if (!user?.franchiseeId) {
+            console.error("Franchisee user missing franchiseeId:", user);
+            setStations([]);
+            return;
+          }
+
           stationsQuery = query(
             collection(DB, "stations"),
             where("franchiseeId", "==", user.franchiseeId)

@@ -11,13 +11,13 @@ const withRoleAuth = (WrappedComponent, allowedRoles) => {
       if (!loading) {
         if (!user) {
           router.push("/login");
-        } else if (!allowedRoles.includes(user.role)) {
+        } else if (!user.role || !allowedRoles.includes(user.role)) {
           router.push("/not-authorized");
         }
       }
     }, [user, loading, router]);
 
-    if (loading || !user || !allowedRoles.includes(user.role)) {
+    if (loading || !user || !user.role || !allowedRoles.includes(user.role)) {
       return <p>Loading...</p>;
     }
 

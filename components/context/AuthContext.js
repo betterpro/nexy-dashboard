@@ -46,6 +46,16 @@ export const AuthProvider = ({ children }) => {
           return;
         }
 
+        // Additional validation for franchisee users
+        if (userData.role === ROLES.FRANCHISEE && !userData.franchiseeId) {
+          console.error("Franchisee user missing franchiseeId:", userData);
+          setUser(null);
+          setUserRole(null);
+          setAuthorised(false);
+          router.push("/login");
+          return;
+        }
+
         setUser({ ...u, ...userData });
         setUserRole(userData.role);
         setAuthorised(true);
