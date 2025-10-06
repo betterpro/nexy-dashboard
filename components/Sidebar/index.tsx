@@ -70,6 +70,18 @@ const menuCategories: MenuCategory[] = [
         icon: "material-symbols-light:display-settings-outline",
         roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
       },
+      {
+        title: "New Stations",
+        path: "/new-stations",
+        icon: "material-symbols-light:ev-station-outline",
+        roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
+      },
+      {
+        title: "Station Management",
+        path: "/station-management",
+        icon: "material-symbols-light:settings-outline",
+        roles: [ROLES.SUPER_ADMIN],
+      },
     ],
   },
   {

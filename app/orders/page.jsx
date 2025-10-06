@@ -17,6 +17,7 @@ import { useAuth } from "@/components/context/AuthContext";
 import withRoleAuth from "@/components/context/withRoleAuth";
 import { ROLES } from "@/components/context/roles";
 import Moment from "react-moment";
+import { updateRentStatus, getRentStatusInfo } from "@/utils/rentService";
 
 const OrdersList = () => {
   const { user, userRole, loading } = useAuth();
@@ -27,6 +28,11 @@ const OrdersList = () => {
   const [lastVisible, setLastVisible] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [totalOrders, setTotalOrders] = useState(0);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [newStatus, setNewStatus] = useState("");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [allowedTransitions, setAllowedTransitions] = useState([]);
 
   const fetchOrders = async (isInitial = false) => {
     try {
@@ -127,6 +133,95 @@ const OrdersList = () => {
     setPageSize(size);
   };
 
+  const handleStatusChange = async (order) => {
+    setSelectedOrder(order);
+    setNewStatus(order.status);
+
+    try {
+      const result = await getRentStatusInfo(order.id);
+      if (result.success) {
+        setAllowedTransitions(result.data.allowedTransitions || []);
+      } else {
+        // Fallback to all statuses if API fails
+        setAllowedTransitions([
+          "renting",
+          "rented",
+          "paid",
+          "in_progress",
+          "cancelled",
+        ]);
+      }
+    } catch (error) {
+      console.error("Error fetching status info:", error);
+      // Fallback to all statuses
+      setAllowedTransitions([
+        "renting",
+        "rented",
+        "paid",
+        "in_progress",
+        "cancelled",
+      ]);
+    }
+
+    setShowStatusModal(true);
+  };
+
+  const handleStatusUpdate = async () => {
+    if (!selectedOrder || !newStatus) {
+      toast.error("Please select a status");
+      return;
+    }
+
+    if (newStatus === selectedOrder.status) {
+      toast.info("Status is already set to this value");
+      setShowStatusModal(false);
+      return;
+    }
+
+    setIsUpdatingStatus(true);
+
+    try {
+      const result = await updateRentStatus(
+        selectedOrder.id,
+        newStatus,
+        selectedOrder.endStationId || selectedOrder.startStationId,
+        new Date()
+      );
+
+      if (result.success) {
+        // Update the local state
+        setOrders((prevOrders) =>
+          prevOrders.map((order) =>
+            order.id === selectedOrder.id
+              ? { ...order, status: newStatus, updatedAt: new Date() }
+              : order
+          )
+        );
+
+        toast.success(
+          result.message || `Status updated to ${newStatus} successfully!`
+        );
+        setShowStatusModal(false);
+        setSelectedOrder(null);
+        setNewStatus("");
+      } else {
+        toast.error(result.error || "Failed to update status");
+      }
+    } catch (error) {
+      console.error("Error updating status:", error);
+      toast.error("Failed to update status");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  const closeStatusModal = () => {
+    setShowStatusModal(false);
+    setSelectedOrder(null);
+    setNewStatus("");
+    setAllowedTransitions([]);
+  };
+
   if (loading && orders.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -193,6 +288,9 @@ const OrdersList = () => {
                 </th>
                 <th className="py-4 px-4 font-medium text-black dark:text-white">
                   End Date
+                </th>
+                <th className="py-4 px-4 font-medium text-black dark:text-white">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -273,12 +371,21 @@ const OrdersList = () => {
                       )}
                     </div>
                   </td>
+                  <td className="py-4 px-4">
+                    <button
+                      onClick={() => handleStatusChange(order)}
+                      className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1 text-xs font-medium text-white hover:bg-primary/90 transition-colors"
+                    >
+                      <Icon icon="mdi:pencil" className="w-3 h-3" />
+                      Change Status
+                    </button>
+                  </td>
                 </tr>
               ))}
               {orders.length === 0 && (
                 <tr>
                   <td
-                    colSpan={8}
+                    colSpan={9}
                     className="py-4 px-4 text-center text-sm text-gray-500 dark:text-gray-400"
                   >
                     No orders found
@@ -317,6 +424,96 @@ const OrdersList = () => {
           </motion.button>
         )}
       </div>
+
+      {/* Status Change Modal */}
+      {showStatusModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white dark:bg-boxdark rounded-lg p-6 w-full max-w-md mx-4"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-black dark:text-white">
+                Change Rent Status
+              </h3>
+              <button
+                onClick={closeStatusModal}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                <Icon icon="mdi:close" className="w-5 h-5" />
+              </button>
+            </div>
+
+            {selectedOrder && (
+              <div className="mb-4 p-3 bg-gray-50 dark:bg-meta-4 rounded">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <strong>Order ID:</strong> {selectedOrder.id}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <strong>Battery ID:</strong>{" "}
+                  {selectedOrder.battery_id || "N/A"}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <strong>Current Status:</strong> {selectedOrder.status}
+                </p>
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                New Status
+              </label>
+              <select
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value)}
+                className="w-full rounded border border-stroke bg-white px-3 py-2 text-sm outline-none focus:border-primary dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+              >
+                <option value={selectedOrder?.status}>
+                  {selectedOrder?.status} (current)
+                </option>
+                {allowedTransitions.map((status) => (
+                  <option key={status} value={status}>
+                    {status.charAt(0).toUpperCase() +
+                      status.slice(1).replace("_", " ")}
+                  </option>
+                ))}
+              </select>
+              {allowedTransitions.length === 0 && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  No status transitions available from current status
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={closeStatusModal}
+                className="flex-1 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded hover:bg-gray-300 dark:text-gray-300 dark:bg-gray-600 dark:hover:bg-gray-700 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStatusUpdate}
+                disabled={
+                  isUpdatingStatus || newStatus === selectedOrder?.status
+                }
+                className="flex-1 px-4 py-2 text-sm font-medium text-white bg-primary rounded hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isUpdatingStatus ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Icon icon="mdi:loading" className="w-4 h-4 animate-spin" />
+                    Updating...
+                  </div>
+                ) : (
+                  "Update Status"
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };

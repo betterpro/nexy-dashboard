@@ -11,13 +11,13 @@ import withRoleAuth from "@/components/context/withRoleAuth";
 const Screen = () => {
   const [stations, setStations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user, userRole } = useAuth();
+  const { user, userRole, loading: authLoading } = useAuth();
 
   useEffect(() => {
     console.log("user", user);
 
-    // Don't fetch stations if user is not loaded yet
-    if (!user || !user.role) {
+    // Don't fetch stations if user is not loaded yet or if still loading
+    if (authLoading || !user || !user.role) {
       return;
     }
 
@@ -63,15 +63,31 @@ const Screen = () => {
           return {
             id: doc.id,
             ...data,
-            // Ensure layout_json exists with default structure
+            // Ensure layout_json exists with default structure for new stations
             layout_json: data.layout_json || {
               top: {
                 height: 80,
-                assets: [],
+                assets: [
+                  {
+                    duration: 5,
+                    link: "",
+                    type: "image",
+                  },
+                ],
               },
               bottom: {
                 height: 20,
-                assets: [],
+                assets: [
+                  {
+                    duration: 5,
+                    link: "",
+                    type: "image",
+                  },
+                ],
+              },
+              layout_size: {
+                height: 1280,
+                width: 800,
               },
             },
           };
@@ -86,9 +102,9 @@ const Screen = () => {
     };
 
     fetchStations();
-  }, [userRole, user?.uid]);
+  }, [userRole, user?.uid, authLoading]);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <div className="mx-auto max-w-screen-2xl p-4 md:p-6 2xl:p-10">
         <div className="flex items-center justify-center h-64">

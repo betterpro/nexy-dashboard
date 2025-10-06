@@ -32,36 +32,49 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
-        // User is logged in, get Firestore user data
-        const userRef = await getDoc(doc(DB, "users", u.uid));
-        const userData = userRef.data();
+        try {
+          // User is logged in, get Firestore user data
+          const userRef = await getDoc(doc(DB, "users", u.uid));
+          const userData = userRef.data();
 
-        // Ensure the user has a valid role
-        if (!userData || !Object.values(ROLES).includes(userData.role)) {
-          console.error("Invalid user role:", userData?.role);
+          // Ensure the user has a valid role
+          if (
+            !userData ||
+            !userData.role ||
+            !Object.values(ROLES).includes(userData.role)
+          ) {
+            console.error("Invalid user role:", userData?.role || "undefined");
+            setUser(null);
+            setUserRole(null);
+            setAuthorised(false);
+            router.push("/login");
+            return;
+          }
+
+          // Additional validation for franchisee users
+          if (userData.role === ROLES.FRANCHISEE && !userData.franchiseeId) {
+            console.error("Franchisee user missing franchiseeId:", userData);
+            setUser(null);
+            setUserRole(null);
+            setAuthorised(false);
+            router.push("/login");
+            return;
+          }
+
+          setUser({ ...u, ...userData });
+          setUserRole(userData.role);
+          setAuthorised(true);
+
+          // Set user role in cookie for middleware
+          document.cookie = `userRole=${userData.role}; path=/`;
+        } catch (error) {
+          console.error("Error fetching user data:", error);
           setUser(null);
           setUserRole(null);
           setAuthorised(false);
           router.push("/login");
           return;
         }
-
-        // Additional validation for franchisee users
-        if (userData.role === ROLES.FRANCHISEE && !userData.franchiseeId) {
-          console.error("Franchisee user missing franchiseeId:", userData);
-          setUser(null);
-          setUserRole(null);
-          setAuthorised(false);
-          router.push("/login");
-          return;
-        }
-
-        setUser({ ...u, ...userData });
-        setUserRole(userData.role);
-        setAuthorised(true);
-
-        // Set user role in cookie for middleware
-        document.cookie = `userRole=${userData.role}; path=/`;
       } else {
         // User is logged out, set user to null and redirect to login page
         setUser(null);
