@@ -227,16 +227,21 @@ const NewStations = () => {
         return;
       }
 
-      // Check if station ID already exists (excluding current station)
-      const existingStations = stations.filter(
-        (station) =>
-          (station.stationId === updatedData.stationId ||
-            station.id === updatedData.stationId) &&
-          station.id !== stationId
-      );
-      if (existingStations.length > 0) {
-        toast.error("A station with this ID already exists");
-        return;
+      // Find the current station being edited
+      const currentStation = stations.find((s) => s.id === stationId);
+
+      // Only check for duplicate stationId if it's being changed
+      if (
+        currentStation &&
+        currentStation.stationId !== updatedData.stationId
+      ) {
+        const existingStations = stations.filter(
+          (station) => station.stationId === updatedData.stationId
+        );
+        if (existingStations.length > 0) {
+          toast.error("A station with this ID already exists");
+          return;
+        }
       }
 
       const stationRef = doc(DB, "Stations", stationId);
@@ -626,14 +631,45 @@ const EditStationForm = ({ station, onUpdate, onCancel }) => {
     currency: station.currency || "CAD",
     clientAddr: station.clientAddr || "",
     logo: station.logo || "https://dashboard.nexy.ca/images/favicon.ico",
+    franchiseeId: station.franchiseeId || "", // Preserve franchiseeId
     // QR Code section
     qrcode: {
       baseurl: station.qrcode?.baseurl || "https://app.nexy.ca/",
       generate: station.qrcode?.generate || true,
-      height: station.qrcode?.height || 150,
-      width: station.qrcode?.width || 150,
-      x: station.qrcode?.x || 300,
-      y: station.qrcode?.y || 1000,
+      height: station.qrcode?.height || 175,
+      width: station.qrcode?.width || 175,
+      x: station.qrcode?.x || 350,
+      y: station.qrcode?.y || 1100,
+    },
+    // Pricing section
+    pricing: {
+      currency: station.pricing?.currency || "CAD",
+      dailyLimitAmount: station.pricing?.dailyLimitAmount || 6,
+      dailyLimitPeriods: station.pricing?.dailyLimitPeriods || 3,
+      dailyLimitResetTime: station.pricing?.dailyLimitResetTime || "00:00:00",
+      damageFee: station.pricing?.damageFee || 30,
+      depositAmount: station.pricing?.depositAmount || 30,
+      depositRefundable: station.pricing?.depositRefundable ?? true,
+      depositRequired: station.pricing?.depositRequired ?? true,
+      freePeriodMinutes: station.pricing?.freePeriodMinutes || 5,
+      freePeriodRequiresPreAuth:
+        station.pricing?.freePeriodRequiresPreAuth ?? true,
+      freeTimeMinutes: station.pricing?.freeTimeMinutes || 5,
+      hasDailyLimit: station.pricing?.hasDailyLimit ?? true,
+      hasDiscounts: station.pricing?.hasDiscounts ?? false,
+      hasFreePeriod: station.pricing?.hasFreePeriod ?? true,
+      lateReturnFee: station.pricing?.lateReturnFee || 30,
+      lostBatteryFee: station.pricing?.lostBatteryFee || 30,
+      minimumRentalMinutes: station.pricing?.minimumRentalMinutes || 15,
+      preAuthAmount: station.pricing?.preAuthAmount || 30,
+      pricePerHour: station.pricing?.pricePerHour || 2,
+      pricePerPeriod: station.pricing?.pricePerPeriod || 2,
+      pricePeriod: station.pricing?.pricePeriod || "hour",
+      pricePeriodDuration: station.pricing?.pricePeriodDuration || 1,
+      requiresPreAuth: station.pricing?.requiresPreAuth ?? true,
+      returnDurationLimitHours: station.pricing?.returnDurationLimitHours || 72,
+      taxIncluded: station.pricing?.taxIncluded ?? true,
+      taxRate: station.pricing?.taxRate || 5,
     },
   });
 
@@ -659,6 +695,20 @@ const EditStationForm = ({ station, onUpdate, onCancel }) => {
               : value,
         },
       });
+    } else if (name.startsWith("pricing.")) {
+      const pricingField = name.split(".")[1];
+      setFormData({
+        ...formData,
+        pricing: {
+          ...formData.pricing,
+          [pricingField]:
+            type === "checkbox"
+              ? checked
+              : type === "number"
+              ? parseFloat(value) || 0
+              : value,
+        },
+      });
     } else {
       setFormData({
         ...formData,
@@ -668,17 +718,17 @@ const EditStationForm = ({ station, onUpdate, onCancel }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50  flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto py-6">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white dark:bg-boxdark rounded-lg p-6 w-full max-w-5xl mx-4"
+        className="bg-white dark:bg-boxdark rounded-lg p-6 w-full max-w-6xl mx-4 my-6"
       >
         <h3 className="text-lg font-semibold mb-4 text-black dark:text-white">
           Edit Station
         </h3>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="max-h-[70vh] overflow-y-auto pr-2">
           <div className="flex gap-6">
             <div className="w-1/2">
               <div>
@@ -809,7 +859,7 @@ const EditStationForm = ({ station, onUpdate, onCancel }) => {
                   <div className="col-span-2">
                     <div className="flex items-center">
                       <input
-                        type="checkdiv"
+                        type="checkbox"
                         name="qrcode.generate"
                         checked={formData.qrcode.generate}
                         onChange={handleChange}
@@ -882,26 +932,416 @@ const EditStationForm = ({ station, onUpdate, onCancel }) => {
               </div>
             </div>
           </div>
-          <div className="flex justify-end space-x-3">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-            >
-              Cancel
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="submit"
-              className="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90"
-            >
-              Update Station
-            </motion.button>
+
+          {/* Pricing Section */}
+          <div className="border-t border-stroke dark:border-strokedark pt-6 mt-6">
+            <h4 className="text-md font-semibold mb-4 text-black dark:text-white">
+              Pricing Configuration
+            </h4>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Basic Pricing */}
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Currency
+                </label>
+                <select
+                  name="pricing.currency"
+                  value={formData.pricing.currency}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                >
+                  <option value="CAD">CAD</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Price Per Hour
+                </label>
+                <input
+                  type="number"
+                  name="pricing.pricePerHour"
+                  value={formData.pricing.pricePerHour}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Price Per Period
+                </label>
+                <input
+                  type="number"
+                  name="pricing.pricePerPeriod"
+                  value={formData.pricing.pricePerPeriod}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Price Period
+                </label>
+                <select
+                  name="pricing.pricePeriod"
+                  value={formData.pricing.pricePeriod}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                >
+                  <option value="hour">Hour</option>
+                  <option value="minute">Minute</option>
+                  <option value="day">Day</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Price Period Duration
+                </label>
+                <input
+                  type="number"
+                  name="pricing.pricePeriodDuration"
+                  value={formData.pricing.pricePeriodDuration}
+                  onChange={handleChange}
+                  min="1"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Tax Rate (%)
+                </label>
+                <input
+                  type="number"
+                  name="pricing.taxRate"
+                  value={formData.pricing.taxRate}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              {/* Deposit Settings */}
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Deposit Amount
+                </label>
+                <input
+                  type="number"
+                  name="pricing.depositAmount"
+                  value={formData.pricing.depositAmount}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Pre-Auth Amount
+                </label>
+                <input
+                  type="number"
+                  name="pricing.preAuthAmount"
+                  value={formData.pricing.preAuthAmount}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Minimum Rental Minutes
+                </label>
+                <input
+                  type="number"
+                  name="pricing.minimumRentalMinutes"
+                  value={formData.pricing.minimumRentalMinutes}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              {/* Fees */}
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Damage Fee
+                </label>
+                <input
+                  type="number"
+                  name="pricing.damageFee"
+                  value={formData.pricing.damageFee}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Late Return Fee
+                </label>
+                <input
+                  type="number"
+                  name="pricing.lateReturnFee"
+                  value={formData.pricing.lateReturnFee}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Lost Battery Fee
+                </label>
+                <input
+                  type="number"
+                  name="pricing.lostBatteryFee"
+                  value={formData.pricing.lostBatteryFee}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              {/* Free Period */}
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Free Period Minutes
+                </label>
+                <input
+                  type="number"
+                  name="pricing.freePeriodMinutes"
+                  value={formData.pricing.freePeriodMinutes}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Free Time Minutes
+                </label>
+                <input
+                  type="number"
+                  name="pricing.freeTimeMinutes"
+                  value={formData.pricing.freeTimeMinutes}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Return Duration Limit (Hours)
+                </label>
+                <input
+                  type="number"
+                  name="pricing.returnDurationLimitHours"
+                  value={formData.pricing.returnDurationLimitHours}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              {/* Daily Limit Settings */}
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Daily Limit Amount
+                </label>
+                <input
+                  type="number"
+                  name="pricing.dailyLimitAmount"
+                  value={formData.pricing.dailyLimitAmount}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Daily Limit Periods
+                </label>
+                <input
+                  type="number"
+                  name="pricing.dailyLimitPeriods"
+                  value={formData.pricing.dailyLimitPeriods}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Daily Limit Reset Time
+                </label>
+                <input
+                  type="time"
+                  name="pricing.dailyLimitResetTime"
+                  value={formData.pricing.dailyLimitResetTime}
+                  onChange={handleChange}
+                  step="1"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              {/* Boolean Settings */}
+              <div className="col-span-1 md:col-span-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="pricing.depositRequired"
+                      checked={formData.pricing.depositRequired}
+                      onChange={handleChange}
+                      className="mr-2 h-4 w-4"
+                    />
+                    <label className="text-sm font-medium text-black dark:text-white">
+                      Deposit Required
+                    </label>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="pricing.depositRefundable"
+                      checked={formData.pricing.depositRefundable}
+                      onChange={handleChange}
+                      className="mr-2 h-4 w-4"
+                    />
+                    <label className="text-sm font-medium text-black dark:text-white">
+                      Deposit Refundable
+                    </label>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="pricing.requiresPreAuth"
+                      checked={formData.pricing.requiresPreAuth}
+                      onChange={handleChange}
+                      className="mr-2 h-4 w-4"
+                    />
+                    <label className="text-sm font-medium text-black dark:text-white">
+                      Requires Pre-Auth
+                    </label>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="pricing.taxIncluded"
+                      checked={formData.pricing.taxIncluded}
+                      onChange={handleChange}
+                      className="mr-2 h-4 w-4"
+                    />
+                    <label className="text-sm font-medium text-black dark:text-white">
+                      Tax Included
+                    </label>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="pricing.hasFreePeriod"
+                      checked={formData.pricing.hasFreePeriod}
+                      onChange={handleChange}
+                      className="mr-2 h-4 w-4"
+                    />
+                    <label className="text-sm font-medium text-black dark:text-white">
+                      Has Free Period
+                    </label>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="pricing.freePeriodRequiresPreAuth"
+                      checked={formData.pricing.freePeriodRequiresPreAuth}
+                      onChange={handleChange}
+                      className="mr-2 h-4 w-4"
+                    />
+                    <label className="text-sm font-medium text-black dark:text-white">
+                      Free Period Requires Pre-Auth
+                    </label>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="pricing.hasDailyLimit"
+                      checked={formData.pricing.hasDailyLimit}
+                      onChange={handleChange}
+                      className="mr-2 h-4 w-4"
+                    />
+                    <label className="text-sm font-medium text-black dark:text-white">
+                      Has Daily Limit
+                    </label>
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      name="pricing.hasDiscounts"
+                      checked={formData.pricing.hasDiscounts}
+                      onChange={handleChange}
+                      className="mr-2 h-4 w-4"
+                    />
+                    <label className="text-sm font-medium text-black dark:text-white">
+                      Has Discounts
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </form>
+        </div>
+
+        <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-stroke dark:border-strokedark">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+          >
+            Cancel
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="submit"
+            onClick={handleSubmit}
+            className="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90"
+          >
+            Update Station
+          </motion.button>
+        </div>
       </motion.div>
     </div>
   );
