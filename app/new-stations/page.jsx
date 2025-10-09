@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   collection,
   getDocs,
@@ -10,8 +10,10 @@ import {
   deleteDoc,
   doc,
   serverTimestamp,
+  GeoPoint,
 } from "firebase/firestore";
-import { DB } from "@/firebase";
+import { DB, storage } from "@/firebase";
+import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import Breadcrumb from "@/components/Breadcrumbs/Breadcrumb";
 import { useAuth } from "@/components/context/AuthContext";
 import { ROLES } from "@/components/context/roles";
@@ -19,6 +21,26 @@ import withRoleAuth from "@/components/context/withRoleAuth";
 import { toast } from "react-toastify";
 import { motion } from "framer-motion";
 import { Icon } from "@iconify/react/dist/iconify.js";
+import {
+  GoogleMap,
+  LoadScript,
+  Autocomplete,
+  Marker,
+} from "@react-google-maps/api";
+import Image from "next/image";
+
+const containerStyle = {
+  width: "100%",
+  height: "400px",
+  borderRadius: "0.5rem",
+};
+
+const center = {
+  lat: 49.2827,
+  lng: -123.1207,
+};
+
+const libraries = ["places"];
 
 const NewStations = () => {
   const [stations, setStations] = useState([]);
@@ -105,10 +127,32 @@ const NewStations = () => {
         return;
       }
 
-      const newStation = {
+      // Process data and convert types
+      const processedData = {
         ...stationData,
+        // Parse numbers
         batteryCount: parseInt(stationData.batteryCount) || 0,
+        slots: parseInt(stationData.slots) || 0,
+        powerBank: parseInt(stationData.powerBank) || 0,
+        parking: parseInt(stationData.parking) || 0,
         price: parseFloat(stationData.price) || 0,
+        revenueShare: parseFloat(stationData.revenueShare) || null,
+      };
+
+      // Create GeoPoint if lat/lng are provided
+      if (stationData.lat && stationData.lng) {
+        processedData.location = new GeoPoint(
+          parseFloat(stationData.lat),
+          parseFloat(stationData.lng)
+        );
+      }
+
+      // Remove lat/lng as they're now in location
+      delete processedData.lat;
+      delete processedData.lng;
+
+      const newStation = {
+        ...processedData,
         lastConnected: serverTimestamp(),
         lastDisconnected: serverTimestamp(),
         lastHeartbeat: serverTimestamp(),
@@ -189,6 +233,7 @@ const NewStations = () => {
         status: "online",
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
+        createDate: serverTimestamp(),
       };
 
       // Use stationId as the document ID
@@ -458,163 +503,938 @@ const AddStationForm = ({ onAdd, onCancel, franchiseeId }) => {
   const [formData, setFormData] = useState({
     stationId: "",
     name: "",
+    description: "",
+    category: "battery",
+    subCategory: "",
     mac: "",
+    // Operational counts
     batteryCount: 0,
+    slots: 0,
+    powerBank: 0,
+    parking: 0,
     price: 0,
     currency: "CAD",
+    // Contact info
+    email: "",
+    phone: "",
+    tel: "",
+    website: "",
+    // Social media
+    facebook: "",
+    instagram: "",
+    tiktok: "",
+    twitter: "",
+    // Location
+    address: "",
+    lat: center.lat,
+    lng: center.lng,
+    // Locale
+    locale: "en-CA",
+    timezone: "America/Toronto",
+    private: false,
+    active: true,
+    // Relationships
     franchiseeId: franchiseeId || "",
+    partnerId: "",
+    agreementId: "",
+    revenueShare: 0,
+    // Media
     clientAddr: "",
     logo: "https://dashboard.nexy.ca/images/favicon.ico",
   });
 
-  const handleSubmit = (e) => {
+  const [logoFile, setLogoFile] = useState(null);
+  const [imageFiles, setImageFiles] = useState([]);
+  const [suggestedImages, setSuggestedImages] = useState([]);
+  const [map, setMap] = useState(null);
+  const autocompleteRef = useRef(null);
+  const mapRef = useRef(null);
+
+  const fetchPlaceImages = async (placeId) => {
+    try {
+      const service = new google.maps.places.PlacesService(map);
+
+      service.getDetails(
+        {
+          placeId: placeId,
+          fields: ["photos"],
+        },
+        (place, status) => {
+          if (
+            status === google.maps.places.PlacesServiceStatus.OK &&
+            place.photos
+          ) {
+            const photos = place.photos.slice(0, 15).map((photo) => {
+              return photo.getUrl({
+                maxWidth: 800,
+                maxHeight: 800,
+              });
+            });
+
+            setSuggestedImages(photos);
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Error fetching place images:", error);
+    }
+  };
+
+  const onLoad = (autocomplete) => {
+    autocompleteRef.current = autocomplete;
+  };
+
+  const onPlaceChanged = () => {
+    const place = autocompleteRef.current.getPlace();
+    if (place.geometry) {
+      const { location } = place.geometry;
+      const newLat = location.lat();
+      const newLng = location.lng();
+
+      setFormData((prev) => ({
+        ...prev,
+        lat: newLat,
+        lng: newLng,
+        address: place?.formatted_address ?? prev.address,
+        phone: place?.formatted_phone_number ?? prev.phone,
+        name: place?.name ?? prev.name,
+        website: place?.website ?? prev.website,
+      }));
+
+      if (place.place_id) {
+        fetchPlaceImages(place.place_id);
+      }
+
+      if (mapRef.current) {
+        mapRef.current.panTo({ lat: newLat, lng: newLng });
+      }
+    }
+  };
+
+  const onMapLoad = (map) => {
+    mapRef.current = map;
+    setMap(map);
+  };
+
+  const onMapClick = (event) => {
+    const newLat = event.latLng.lat();
+    const newLng = event.latLng.lng();
+    setFormData((prev) => ({
+      ...prev,
+      lat: newLat,
+      lng: newLng,
+    }));
+  };
+
+  const handleSuggestedLogoSelect = async (url) => {
+    try {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      const blob = await response.blob();
+      const file = new File([blob], "logo.jpg", { type: "image/jpeg" });
+      setLogoFile(file);
+    } catch (error) {
+      console.error("Error loading image:", error);
+      toast.error("Failed to download logo");
+    }
+  };
+
+  const handleSuggestedImageSelect = async (url) => {
+    try {
+      const proxyUrl = `/api/proxy-image?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      const blob = await response.blob();
+      const file = new File([blob], `image-${Date.now()}.jpg`, {
+        type: "image/jpeg",
+      });
+      setImageFiles((prev) => [...prev, file]);
+    } catch (error) {
+      console.error("Error loading image:", error);
+      toast.error("Failed to download image");
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onAdd(formData);
+
+    try {
+      // Upload logo to Firebase Storage and get the URL
+      let logoURL = formData.logo;
+      if (logoFile) {
+        const logoRef = ref(storage, `stations/${formData.stationId}/logo`);
+        await uploadBytes(logoRef, logoFile);
+        logoURL = await getDownloadURL(logoRef);
+      }
+
+      // Upload images to Firebase Storage and get the URLs
+      const imageUrls = [];
+      for (const file of imageFiles) {
+        const imageRef = ref(
+          storage,
+          `stations/${formData.stationId}/images/${file.name}`
+        );
+        await uploadBytes(imageRef, file);
+        const url = await getDownloadURL(imageRef);
+        imageUrls.push(url);
+      }
+
+      // Prepare final data with uploaded media
+      const finalData = {
+        ...formData,
+        logo: logoURL,
+        images: imageUrls,
+      };
+
+      onAdd(finalData);
+    } catch (error) {
+      console.error("Error uploading media:", error);
+      toast.error("Failed to upload media files");
+    }
   };
 
   const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]:
+        type === "checkbox"
+          ? checked
+          : type === "number"
+          ? parseFloat(value) || 0
+          : value,
     });
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto py-6">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="bg-white dark:bg-boxdark rounded-lg p-6 w-full max-w-md mx-4"
+        className="bg-white dark:bg-boxdark rounded-lg p-6 w-full max-w-6xl mx-4 my-6"
       >
         <h3 className="text-lg font-semibold mb-4 text-black dark:text-white">
           Add New Station
         </h3>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-black dark:text-white mb-2">
-              Station ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="stationId"
-              value={formData.stationId}
-              onChange={handleChange}
-              required
-              className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-black dark:text-white mb-2">
-              Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-black dark:text-white mb-2">
-              MAC Address <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="mac"
-              value={formData.mac}
-              onChange={handleChange}
-              placeholder="e.g., 9803cfc176be"
-              required
-              className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Format: 12 hexadecimal characters (e.g., 9803cfc176be)
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-black dark:text-white mb-2">
-              Battery Count
-            </label>
-            <input
-              type="number"
-              name="batteryCount"
-              value={formData.batteryCount}
-              onChange={handleChange}
-              min="0"
-              className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-black dark:text-white mb-2">
-              Price
-            </label>
-            <input
-              type="number"
-              name="price"
-              value={formData.price}
-              onChange={handleChange}
-              min="0"
-              step="0.01"
-              className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-black dark:text-white mb-2">
-              Currency
-            </label>
-            <select
-              name="currency"
-              value={formData.currency}
-              onChange={handleChange}
-              className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+        <div className="max-h-[70vh] overflow-y-auto pr-2">
+          {/* Google Maps Location Section */}
+          <div className="mb-6">
+            <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+              Location Search
+            </h4>
+            <LoadScript
+              googleMapsApiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}
+              libraries={libraries}
             >
-              <option value="CAD">CAD</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-            </select>
+              <div className="space-y-4">
+                <Autocomplete onLoad={onLoad} onPlaceChanged={onPlaceChanged}>
+                  <div className="relative">
+                    <Icon
+                      icon="mdi:map-search"
+                      className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Search for a place on Google Maps..."
+                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-stroke bg-transparent font-medium outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:focus:border-primary"
+                    />
+                  </div>
+                </Autocomplete>
+                <GoogleMap
+                  mapContainerStyle={containerStyle}
+                  center={{ lat: formData.lat, lng: formData.lng }}
+                  zoom={10}
+                  onClick={onMapClick}
+                  onLoad={onMapLoad}
+                >
+                  <Marker position={{ lat: formData.lat, lng: formData.lng }} />
+                </GoogleMap>
+              </div>
+            </LoadScript>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-black dark:text-white mb-2">
-              Client Address
-            </label>
-            <input
-              type="text"
-              name="clientAddr"
-              value={formData.clientAddr}
-              onChange={handleChange}
-              className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary disabled:cursor-default disabled:bg-whiter dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
-            />
+          {/* Basic Information */}
+          <div className="mb-6">
+            <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+              Basic Information
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Station ID <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="stationId"
+                  value={formData.stationId}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  rows="2"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Category
+                </label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                >
+                  <option value="battery">Battery</option>
+                  <option value="powerbank">Powerbank</option>
+                  <option value="parking">Parking</option>
+                  <option value="charging">Charging</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Sub Category
+                </label>
+                <input
+                  type="text"
+                  name="subCategory"
+                  value={formData.subCategory}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  MAC Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="mac"
+                  value={formData.mac}
+                  onChange={handleChange}
+                  placeholder="e.g., 9803cfc176be"
+                  required
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div className="flex items-center space-x-6">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="active"
+                    checked={formData.active}
+                    onChange={handleChange}
+                    className="mr-2 h-4 w-4"
+                  />
+                  <label className="text-sm font-medium text-black dark:text-white">
+                    Active
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name="private"
+                    checked={formData.private}
+                    onChange={handleChange}
+                    className="mr-2 h-4 w-4"
+                  />
+                  <label className="text-sm font-medium text-black dark:text-white">
+                    Private
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div className="flex justify-end space-x-3">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="button"
-              onClick={onCancel}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
-            >
-              Cancel
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              type="submit"
-              className="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90"
-            >
-              Add Station
-            </motion.button>
+          {/* Operational Settings */}
+          <div className="mb-6">
+            <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+              Operational Settings
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Battery Count
+                </label>
+                <input
+                  type="number"
+                  name="batteryCount"
+                  value={formData.batteryCount}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Slots
+                </label>
+                <input
+                  type="number"
+                  name="slots"
+                  value={formData.slots}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Power Bank
+                </label>
+                <input
+                  type="number"
+                  name="powerBank"
+                  value={formData.powerBank}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Parking Spots
+                </label>
+                <input
+                  type="number"
+                  name="parking"
+                  value={formData.parking}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Price
+                </label>
+                <input
+                  type="number"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleChange}
+                  min="0"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Currency
+                </label>
+                <select
+                  name="currency"
+                  value={formData.currency}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                >
+                  <option value="CAD">CAD</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+            </div>
           </div>
-        </form>
+
+          {/* Contact Information */}
+          <div className="mb-6">
+            <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+              Contact Information
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Phone
+                </label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Website
+                </label>
+                <input
+                  type="url"
+                  name="website"
+                  value={formData.website}
+                  onChange={handleChange}
+                  placeholder="https://"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Client Address
+                </label>
+                <input
+                  type="text"
+                  name="clientAddr"
+                  value={formData.clientAddr}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Social Media */}
+          <div className="mb-6">
+            <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+              Social Media
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Facebook
+                </label>
+                <input
+                  type="url"
+                  name="facebook"
+                  value={formData.facebook}
+                  onChange={handleChange}
+                  placeholder="https://facebook.com/..."
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Instagram
+                </label>
+                <input
+                  type="url"
+                  name="instagram"
+                  value={formData.instagram}
+                  onChange={handleChange}
+                  placeholder="https://instagram.com/..."
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  TikTok
+                </label>
+                <input
+                  type="url"
+                  name="tiktok"
+                  value={formData.tiktok}
+                  onChange={handleChange}
+                  placeholder="https://tiktok.com/@..."
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Twitter
+                </label>
+                <input
+                  type="url"
+                  name="twitter"
+                  value={formData.twitter}
+                  onChange={handleChange}
+                  placeholder="https://twitter.com/..."
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Location */}
+          <div className="mb-6">
+            <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+              Location
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Address
+                </label>
+                <input
+                  type="text"
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Latitude
+                </label>
+                <input
+                  type="number"
+                  name="lat"
+                  value={formData.lat}
+                  onChange={handleChange}
+                  step="any"
+                  placeholder="e.g., 43.6532"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Longitude
+                </label>
+                <input
+                  type="number"
+                  name="lng"
+                  value={formData.lng}
+                  onChange={handleChange}
+                  step="any"
+                  placeholder="e.g., -79.3832"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Locale
+                </label>
+                <input
+                  type="text"
+                  name="locale"
+                  value={formData.locale}
+                  onChange={handleChange}
+                  placeholder="e.g., en-CA"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Timezone
+                </label>
+                <input
+                  type="text"
+                  name="timezone"
+                  value={formData.timezone}
+                  onChange={handleChange}
+                  placeholder="e.g., America/Toronto"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Relationships */}
+          <div className="mb-6">
+            <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+              Relationships
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Partner ID
+                </label>
+                <input
+                  type="text"
+                  name="partnerId"
+                  value={formData.partnerId}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Agreement ID
+                </label>
+                <input
+                  type="text"
+                  name="agreementId"
+                  value={formData.agreementId}
+                  onChange={handleChange}
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Revenue Share (%)
+                </label>
+                <input
+                  type="number"
+                  name="revenueShare"
+                  value={formData.revenueShare}
+                  onChange={handleChange}
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Logo URL
+                </label>
+                <input
+                  type="url"
+                  name="logo"
+                  value={formData.logo}
+                  onChange={handleChange}
+                  placeholder="https://..."
+                  className="w-full rounded border border-stroke bg-transparent py-3 px-5 text-black outline-none transition focus:border-primary active:border-primary dark:border-form-strokedark dark:bg-form-input dark:text-white dark:focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Media Upload Section */}
+          <div className="mb-6">
+            <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+              Media Upload
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Station Logo
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setLogoFile(e.target.files[0])}
+                    className="hidden"
+                    id="logo-upload"
+                  />
+                  <label
+                    htmlFor="logo-upload"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-stroke bg-transparent cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <Icon icon="mdi:image-plus" className="w-5 h-5" />
+                    <span>Choose Logo</span>
+                  </label>
+                  {logoFile && (
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {logoFile.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-black dark:text-white mb-2">
+                  Station Images
+                </label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => setImageFiles([...e.target.files])}
+                    className="hidden"
+                    id="images-upload"
+                  />
+                  <label
+                    htmlFor="images-upload"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-stroke bg-transparent cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                  >
+                    <Icon icon="mdi:image-multiple" className="w-5 h-5" />
+                    <span>Choose Images</span>
+                  </label>
+                  {imageFiles.length > 0 && (
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {imageFiles.length} files
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Media Preview */}
+          {(logoFile ||
+            imageFiles.length > 0 ||
+            suggestedImages.length > 0) && (
+            <div className="mb-6">
+              <h4 className="text-md font-semibold mb-3 text-black dark:text-white border-b border-stroke dark:border-strokedark pb-2">
+                Media Preview
+              </h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {logoFile && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="relative aspect-square rounded-lg overflow-hidden"
+                  >
+                    <div className="absolute inset-0 bg-primary/20 z-10 flex items-center justify-center">
+                      <span className="text-white text-sm font-medium">
+                        Logo
+                      </span>
+                    </div>
+                    <Image
+                      src={URL.createObjectURL(logoFile)}
+                      alt="Logo"
+                      fill
+                      className="object-cover"
+                    />
+                  </motion.div>
+                )}
+
+                {imageFiles.map((file, index) => (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="relative aspect-square rounded-lg overflow-hidden group"
+                  >
+                    <Image
+                      src={URL.createObjectURL(file)}
+                      alt={`Image ${index + 1}`}
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex flex-col items-center justify-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setLogoFile(file);
+                          setImageFiles((files) =>
+                            files.filter((_, i) => i !== index)
+                          );
+                        }}
+                        className="px-3 py-1 bg-primary text-white text-sm rounded opacity-0 group-hover:opacity-100"
+                      >
+                        Set as Logo
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setImageFiles((files) =>
+                            files.filter((_, i) => i !== index)
+                          );
+                        }}
+                        className="px-3 py-1 bg-red-500 text-white text-sm rounded opacity-0 group-hover:opacity-100"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+
+                {suggestedImages.map((url, index) => (
+                  <motion.div
+                    key={`suggested-${index}`}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="relative aspect-square rounded-lg overflow-hidden group"
+                  >
+                    <Image
+                      src={url}
+                      alt={`Suggested ${index + 1}`}
+                      fill
+                      className="object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex flex-col items-center justify-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleSuggestedLogoSelect(url);
+                          setSuggestedImages((prev) =>
+                            prev.filter((_, i) => i !== index)
+                          );
+                        }}
+                        className="px-3 py-1 bg-primary text-white text-sm rounded opacity-0 group-hover:opacity-100"
+                      >
+                        Set as Logo
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleSuggestedImageSelect(url);
+                          setSuggestedImages((prev) =>
+                            prev.filter((_, i) => i !== index)
+                          );
+                        }}
+                        className="px-3 py-1 bg-green-500 text-white text-sm rounded opacity-0 group-hover:opacity-100"
+                      >
+                        Add Image
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-stroke dark:border-strokedark">
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+          >
+            Cancel
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="button"
+            onClick={handleSubmit}
+            className="px-4 py-2 bg-primary text-white rounded hover:bg-opacity-90"
+          >
+            Add Station
+          </motion.button>
+        </div>
       </motion.div>
     </div>
   );
