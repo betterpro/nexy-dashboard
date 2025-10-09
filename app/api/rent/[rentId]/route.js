@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { DB } from "@/firebase";
-import { RentUpdateData } from "@/types/rent";
 
 export async function PUT(request) {
   try {
@@ -61,7 +60,7 @@ export async function PUT(request) {
     }
 
     // Prepare update data
-    const updateData: RentUpdateData = {
+    const updateData = {
       endStationId,
       endDate: endDate.toDate ? endDate : serverTimestamp(),
       status: "rented",
