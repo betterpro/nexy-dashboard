@@ -334,6 +334,30 @@ const NewStations = () => {
     }
   };
 
+  const handleToggleField = async (stationId, field, currentValue) => {
+    try {
+      const stationRef = doc(DB, "Stations", stationId);
+      await updateDoc(stationRef, {
+        [field]: !currentValue,
+        updatedAt: serverTimestamp(),
+      });
+
+      // Update local state
+      setStations((prevStations) =>
+        prevStations.map((station) =>
+          station.id === stationId
+            ? { ...station, [field]: !currentValue }
+            : station
+        )
+      );
+
+      toast.success(`Station ${field} updated successfully!`);
+    } catch (error) {
+      console.error(`Error updating station ${field}:`, error);
+      toast.error(`Failed to update station ${field}`);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -371,6 +395,7 @@ const NewStations = () => {
               stations={stations}
               onEdit={setEditingStation}
               onDelete={handleDeleteStation}
+              onToggle={handleToggleField}
             />
           </div>
         </div>
@@ -396,7 +421,7 @@ const NewStations = () => {
 };
 
 // Station Table Component
-const NewStationsTable = ({ stations, onEdit, onDelete }) => {
+const NewStationsTable = ({ stations, onEdit, onDelete, onToggle }) => {
   return (
     <div className="overflow-x-auto">
       <table className="w-full table-auto">
@@ -419,6 +444,12 @@ const NewStationsTable = ({ stations, onEdit, onDelete }) => {
             </th>
             <th className="min-w-[100px] py-4 px-4 font-medium text-black dark:text-white">
               Status
+            </th>
+            <th className="min-w-[80px] py-4 px-4 font-medium text-black dark:text-white text-center">
+              Active
+            </th>
+            <th className="min-w-[80px] py-4 px-4 font-medium text-black dark:text-white text-center">
+              Private
             </th>
             <th className="min-w-[100px] py-4 px-4 font-medium text-black dark:text-white">
               Last Updated
@@ -463,6 +494,48 @@ const NewStationsTable = ({ stations, onEdit, onDelete }) => {
                 >
                   {station.status}
                 </span>
+              </td>
+              <td className="border-b border-stroke py-5 px-4 dark:border-strokedark">
+                <div className="flex justify-center">
+                  <button
+                    onClick={() =>
+                      onToggle(station.id, "active", station.active)
+                    }
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      station.active
+                        ? "bg-primary"
+                        : "bg-gray-300 dark:bg-gray-600"
+                    }`}
+                    title={station.active ? "Active" : "Inactive"}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        station.active ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+              </td>
+              <td className="border-b border-stroke py-5 px-4 dark:border-strokedark">
+                <div className="flex justify-center">
+                  <button
+                    onClick={() =>
+                      onToggle(station.id, "private", station.private)
+                    }
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      station.private
+                        ? "bg-warning"
+                        : "bg-gray-300 dark:bg-gray-600"
+                    }`}
+                    title={station.private ? "Private" : "Public"}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        station.private ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                  </button>
+                </div>
               </td>
               <td className="border-b border-stroke py-5 px-4 dark:border-strokedark">
                 <p className="text-black dark:text-white">
