@@ -5,7 +5,7 @@ import {
   getDocs,
   query,
   where,
-  addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   doc,
@@ -96,13 +96,11 @@ const NewStations = () => {
         return;
       }
 
-      // Check if station ID already exists
-      const existingStations = stations.filter(
-        (station) =>
-          station.stationId === stationData.stationId ||
-          station.id === stationData.stationId
+      // Check if station ID already exists (document ID will be the stationId)
+      const existingStation = stations.find(
+        (station) => station.id === stationData.stationId
       );
-      if (existingStations.length > 0) {
+      if (existingStation) {
         toast.error("A station with this ID already exists");
         return;
       }
@@ -193,7 +191,9 @@ const NewStations = () => {
         updatedAt: serverTimestamp(),
       };
 
-      await addDoc(collection(DB, "Stations"), newStation);
+      // Use stationId as the document ID
+      const stationRef = doc(DB, "Stations", stationData.stationId);
+      await setDoc(stationRef, newStation);
       toast.success("Station added successfully!");
       setShowAddForm(false);
 
