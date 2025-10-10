@@ -1,6 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+  serverTimestamp,
+  addDoc,
+  collection,
+} from "firebase/firestore";
 import { DB } from "@/firebase";
 import { useParams, useRouter } from "next/navigation";
 import Breadcrumb from "@/components/Breadcrumbs/Breadcrumb";
@@ -37,6 +44,15 @@ const ScreenEdit = () => {
           if (
             user?.role === ROLES.FRANCHISEE &&
             data.franchiseeId !== user.franchiseeId
+          ) {
+            toast.error("You don't have permission to access this station");
+            router.push("/screen");
+            return;
+          }
+
+          if (
+            user?.role === ROLES.PARTNER &&
+            data.partnerId !== user.partnerId
           ) {
             toast.error("You don't have permission to access this station");
             router.push("/screen");
@@ -204,7 +220,98 @@ const ScreenEdit = () => {
         return_dialog: returnDialogData || prev.return_dialog,
       }));
 
-      toast.success("Screen layout saved successfully!");
+      // Send email notification if user is a partner
+      if (user?.role === ROLES.PARTNER) {
+        try {
+          const emailData = {
+            to: "reza@nexy.ca",
+            message: {
+              subject: `🔔 Screen Layout Change - Approval Required - ${
+                station.name || station.stationId
+              }`,
+              html: `
+                <h2>Screen Layout Change Submitted for Approval</h2>
+                <p>A partner has submitted screen layout changes for a station that require your approval.</p>
+                <hr>
+                <h3>Station Details:</h3>
+                <ul>
+                  <li><strong>Station ID:</strong> ${
+                    station.stationId || stationId
+                  }</li>
+                  <li><strong>Station Name:</strong> ${
+                    station.name || "N/A"
+                  }</li>
+                  <li><strong>Partner:</strong> ${
+                    user.fullName || user.email || "Unknown"
+                  }</li>
+                  <li><strong>Partner Email:</strong> ${
+                    user.email || "N/A"
+                  }</li>
+                  <li><strong>Partner ID:</strong> ${
+                    user.partnerId || "N/A"
+                  }</li>
+                  <li><strong>Updated At:</strong> ${new Date().toLocaleString()}</li>
+                </ul>
+                <hr>
+                <h3>Changes Made:</h3>
+                <ul>
+                  ${layoutData ? "<li>✓ Screen layout updated</li>" : ""}
+                  ${
+                    releaseDialogData ? "<li>✓ Release dialog updated</li>" : ""
+                  }
+                  ${returnDialogData ? "<li>✓ Return dialog updated</li>" : ""}
+                </ul>
+                <hr>
+                <p style="background-color: #FEF3C7; border-left: 4px solid #F59E0B; padding: 12px; margin: 20px 0;">
+                  ⚠️ <strong>Action Required:</strong> Please review and approve these changes within 48 hours.
+                </p>
+                <p>Please review the changes in the dashboard and approve or reject them.</p>
+                <p><a href="${
+                  window.location.origin
+                }/screen/${stationId}" style="background-color: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View & Approve Changes</a></p>
+              `,
+              text: `
+Screen Layout Change Submitted for Approval
+
+A partner has submitted screen layout changes for a station that require your approval.
+
+⚠️ ACTION REQUIRED: Please review and approve these changes within 48 hours.
+
+Station Details:
+- Station ID: ${station.stationId || stationId}
+- Station Name: ${station.name || "N/A"}
+- Partner: ${user.fullName || user.email || "Unknown"}
+- Partner Email: ${user.email || "N/A"}
+- Partner ID: ${user.partnerId || "N/A"}
+- Updated At: ${new Date().toLocaleString()}
+
+Changes Made:
+${layoutData ? "✓ Screen layout updated" : ""}
+${releaseDialogData ? "✓ Release dialog updated" : ""}
+${returnDialogData ? "✓ Return dialog updated" : ""}
+
+Please review the changes in the dashboard and approve or reject them.
+View & Approve: ${window.location.origin}/screen/${stationId}
+              `,
+            },
+          };
+
+          // Add email to the mail collection (Trigger Email extension)
+          await addDoc(collection(DB, "mail"), emailData);
+          console.log("Email notification queued successfully");
+        } catch (emailError) {
+          console.error("Error sending email notification:", emailError);
+          // Don't show error to user, just log it
+        }
+      }
+
+      if (user?.role === ROLES.PARTNER) {
+        toast.success(
+          "Screen layout submitted for approval! Changes will be reviewed within 48 hours."
+        );
+      } else {
+        toast.success("Screen layout saved successfully!");
+      }
     } catch (error) {
       console.error("Error saving layout:", error);
       toast.error("Error saving layout. Please try again.");
@@ -241,6 +348,40 @@ const ScreenEdit = () => {
         <Breadcrumb
           pageName={`Screen Layout - ${station.name || station.stationId}`}
         />
+
+        {/* Approval Notice for Partners */}
+        {user?.role === ROLES.PARTNER && (
+          <div className="mb-6 rounded-lg border-l-4 border-warning bg-warning bg-opacity-10 p-4 shadow-md dark:bg-warning dark:bg-opacity-10">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-warning bg-opacity-20">
+                <svg
+                  className="fill-current text-warning"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M10 0C4.47715 0 0 4.47715 0 10C0 15.5228 4.47715 20 10 20C15.5228 20 20 15.5228 20 10C20 4.47715 15.5228 0 10 0ZM10 15C9.44772 15 9 14.5523 9 14C9 13.4477 9.44772 13 10 13C10.5523 13 11 13.4477 11 14C11 14.5523 10.5523 15 10 15ZM11 11C11 11.5523 10.5523 12 10 12C9.44772 12 9 11.5523 9 11V6C9 5.44772 9.44772 5 10 5C10.5523 5 11 5.44772 11 6V11Z"
+                    fill=""
+                  />
+                </svg>
+              </div>
+              <div className="w-full">
+                <h5 className="mb-2 text-base font-semibold text-warning">
+                  Approval Required
+                </h5>
+                <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                  Your screen layout changes will be submitted to Nexy for
+                  review. All changes require approval and will take up to{" "}
+                  <strong>48 hours</strong> to be reviewed and applied. You will
+                  receive a notification once your changes have been approved.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-title-md2 font-semibold text-black dark:text-white">
@@ -287,4 +428,8 @@ const ScreenEdit = () => {
   );
 };
 
-export default withRoleAuth(ScreenEdit, [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE]);
+export default withRoleAuth(ScreenEdit, [
+  ROLES.SUPER_ADMIN,
+  ROLES.FRANCHISEE,
+  ROLES.PARTNER,
+]);

@@ -55,6 +55,22 @@ const NewStations = () => {
       return;
     }
 
+    // For franchisee users, wait until franchiseeId is loaded
+    if (user.role === "franchisee" && !user.franchiseeId) {
+      console.log("Waiting for franchiseeId to load...");
+      return;
+    }
+
+    // For partner users, check if partnerId is available
+    if (user.role === "partner" && !user.partnerId) {
+      console.warn(
+        "Partner user has no partnerId assigned. Showing empty list."
+      );
+      setStations([]);
+      setLoading(false);
+      return;
+    }
+
     const fetchStations = async () => {
       try {
         setLoading(true);
@@ -73,6 +89,21 @@ const NewStations = () => {
           stationsQuery = query(
             collection(DB, "Stations"),
             where("franchiseeId", "==", user.franchiseeId)
+          );
+        } else if (user.role === "partner") {
+          if (!user?.partnerId) {
+            console.warn(
+              "Partner user missing partnerId. No stations will be shown."
+            );
+            // This case is already handled above, but keeping for safety
+            setStations([]);
+            setLoading(false);
+            return;
+          }
+
+          stationsQuery = query(
+            collection(DB, "Stations"),
+            where("partnerId", "==", user.partnerId)
           );
         }
 
@@ -99,7 +130,14 @@ const NewStations = () => {
     };
 
     fetchStations();
-  }, [userRole, user?.uid, authLoading]);
+  }, [
+    userRole,
+    user?.uid,
+    user?.role,
+    user?.franchiseeId,
+    user?.partnerId,
+    authLoading,
+  ]);
 
   const handleAddStation = async (stationData) => {
     try {
@@ -391,12 +429,22 @@ const NewStations = () => {
 
         <div className="rounded-sm border border-stroke bg-white px-5 pt-6 pb-2.5 shadow-default dark:border-strokedark dark:bg-boxdark sm:px-7.5 xl:pb-1">
           <div className="max-w-full overflow-x-auto">
-            <NewStationsTable
-              stations={stations}
-              onEdit={setEditingStation}
-              onDelete={handleDeleteStation}
-              onToggle={handleToggleField}
-            />
+            {stations.length === 0 && !loading ? (
+              <div className="py-10 text-center">
+                <p className="text-lg text-gray-500 dark:text-gray-400">
+                  {userRole === ROLES.PARTNER
+                    ? "No stations assigned to your partner account yet. Please contact your administrator."
+                    : "No stations found."}
+                </p>
+              </div>
+            ) : (
+              <NewStationsTable
+                stations={stations}
+                onEdit={setEditingStation}
+                onDelete={handleDeleteStation}
+                onToggle={handleToggleField}
+              />
+            )}
           </div>
         </div>
 
@@ -405,6 +453,7 @@ const NewStations = () => {
             onAdd={handleAddStation}
             onCancel={() => setShowAddForm(false)}
             franchiseeId={user?.franchiseeId}
+            partnerId={user?.partnerId}
           />
         )}
 
@@ -572,7 +621,7 @@ const NewStationsTable = ({ stations, onEdit, onDelete, onToggle }) => {
 };
 
 // Add Station Form Component
-const AddStationForm = ({ onAdd, onCancel, franchiseeId }) => {
+const AddStationForm = ({ onAdd, onCancel, franchiseeId, partnerId }) => {
   const [formData, setFormData] = useState({
     stationId: "",
     name: "",
@@ -608,7 +657,7 @@ const AddStationForm = ({ onAdd, onCancel, franchiseeId }) => {
     active: true,
     // Relationships
     franchiseeId: franchiseeId || "",
-    partnerId: "",
+    partnerId: partnerId || "",
     agreementId: "",
     revenueShare: 0,
     // Media
@@ -2240,4 +2289,8 @@ const EditStationForm = ({ station, onUpdate, onCancel }) => {
   );
 };
 
-export default withRoleAuth(NewStations, [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE]);
+export default withRoleAuth(NewStations, [
+  ROLES.SUPER_ADMIN,
+  ROLES.FRANCHISEE,
+  ROLES.PARTNER,
+]);

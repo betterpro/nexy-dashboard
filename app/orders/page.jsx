@@ -90,10 +90,12 @@ const OrdersList = () => {
       }
 
       const ordersSnapshot = await getDocs(ordersQuery);
-      const ordersList = ordersSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      const ordersList = ordersSnapshot.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter((order) => !order.archived); // Filter out archived rents
 
       // Update last visible document
       setLastVisible(ordersSnapshot.docs[ordersSnapshot.docs.length - 1]);

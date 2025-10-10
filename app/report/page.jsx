@@ -96,13 +96,19 @@ function NexyDashboard() {
       const rentsSnapshot = await getDocs(rentsQuery);
 
       let totalRevenuecont = 0;
-      const rentsList = rentsSnapshot.docs.map((doc) => {
-        const data = doc.data();
-        totalRevenuecont += data.totalPayment ?? 0;
-        return {
-          id: doc.id,
-          ...data,
-        };
+      const rentsList = rentsSnapshot.docs
+        .map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            ...data,
+          };
+        })
+        .filter((rent) => !rent.archived); // Filter out archived rents
+
+      // Calculate total revenue only for non-archived rents
+      rentsList.forEach((rent) => {
+        totalRevenuecont += rent.totalPayment ?? 0;
       });
 
       setRents(rentsList);

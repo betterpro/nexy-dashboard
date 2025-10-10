@@ -33,10 +33,15 @@ const RentManagement = () => {
       );
 
       const rentsSnapshot = await getDocs(rentsQuery);
-      const rentsList = rentsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Rent[];
+      const rentsList = rentsSnapshot.docs
+        .map(
+          (doc) =>
+            ({
+              id: doc.id,
+              ...doc.data(),
+            } as Rent)
+        )
+        .filter((rent) => !rent.archived); // Filter out archived rents
 
       setRents(rentsList);
     } catch (error) {

@@ -2,18 +2,29 @@
 import axios from "axios";
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { deleteDoc, doc, updateDoc, getDoc, collection } from "firebase/firestore"; // Import Firebase functions
+import {
+  deleteDoc,
+  doc,
+  updateDoc,
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  writeBatch,
+} from "firebase/firestore"; // Import Firebase functions
 import { DB } from "@/firebase"; // Import your Firebase config
 import { Icon } from "@iconify/react/dist/iconify.js";
 import { useAuth } from "@/components/context/AuthContext";
 import { ROLES } from "@/components/context/roles";
 import { getBatteryStatus } from "@/utils/batteryStatus";
-import { 
-  timeZones, 
+import { toast } from "react-toastify";
+import {
+  timeZones,
   isStationOpen,
   formatOperatingHours,
   getDayOfWeekInTimezone,
-  getCurrentTimeInTimezone
+  getCurrentTimeInTimezone,
 } from "@/utils/timezone";
 
 const handleShowAsPartnerToggle = async (stationId, currentValue) => {
@@ -38,6 +49,9 @@ const StationsTable = (Props) => {
   const [stationData, setStationData] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [deleteStationId, setDeleteStationId] = useState(null);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [archiveStationId, setArchiveStationId] = useState(null);
+  const [archiving, setArchiving] = useState(false);
   const { userRole } = useAuth();
   const [agreementData, setAgreementData] = useState({});
 
@@ -120,9 +134,9 @@ const StationsTable = (Props) => {
       const agreementRef = doc(DB, "partnershipAgreements", agreementId);
       const agreementDoc = await getDoc(agreementRef);
       if (agreementDoc.exists()) {
-        setAgreementData(prev => ({
+        setAgreementData((prev) => ({
           ...prev,
-          [agreementId]: agreementDoc.data()
+          [agreementId]: agreementDoc.data(),
         }));
       }
     } catch (error) {
@@ -132,14 +146,77 @@ const StationsTable = (Props) => {
 
   // Modify useEffect to fetch agreement data when stations change
   useEffect(() => {
-    Props.stations.forEach(station => {
+    Props.stations.forEach((station) => {
       if (station.agreementId) {
         fetchAgreementData(station.agreementId);
       }
     });
   }, [Props.stations]);
 
-  console.log('table',stationData);
+  // Handle archive rents button click
+  const handleArchiveRentsClick = (stationId) => {
+    setArchiveStationId(stationId);
+    setShowArchiveModal(true);
+  };
+
+  // Archive all rents for a station
+  const confirmArchiveRents = async () => {
+    if (!archiveStationId) return;
+
+    try {
+      setArchiving(true);
+      toast.info("Archiving rents...");
+
+      // Query all rents for this station
+      const rentsRef = collection(DB, "rents");
+      const rentsQuery = query(
+        rentsRef,
+        where("startStationId", "==", archiveStationId)
+      );
+
+      const rentsSnapshot = await getDocs(rentsQuery);
+
+      if (rentsSnapshot.empty) {
+        toast.warning("No rents found for this station.");
+        setShowArchiveModal(false);
+        setArchiveStationId(null);
+        setArchiving(false);
+        return;
+      }
+
+      // Use batch write for better performance
+      const batch = writeBatch(DB);
+      let updateCount = 0;
+
+      rentsSnapshot.docs.forEach((rentDoc) => {
+        const rentData = rentDoc.data();
+        // Only archive if not already archived
+        if (!rentData.archived) {
+          batch.update(rentDoc.ref, {
+            archived: true,
+            archivedAt: new Date(),
+          });
+          updateCount++;
+        }
+      });
+
+      // Commit the batch
+      await batch.commit();
+
+      toast.success(
+        `Successfully archived ${updateCount} rent(s) for this station.`
+      );
+      setShowArchiveModal(false);
+      setArchiveStationId(null);
+    } catch (error) {
+      console.error("Error archiving rents:", error);
+      toast.error("Failed to archive rents. Please try again.");
+    } finally {
+      setArchiving(false);
+    }
+  };
+
+  console.log("table", stationData);
   return (
     <div className="rounded-sm ">
       <div className="max-w-full overflow-x-auto">
@@ -172,7 +249,7 @@ const StationsTable = (Props) => {
           <tbody>
             {Props.stations.map((packageItem, key) => {
               const isOpen = isStationOpen(packageItem);
-              
+
               return (
                 <tr
                   key={key}
@@ -277,7 +354,7 @@ const StationsTable = (Props) => {
                                   agreementData[packageItem.agreementId].phone
                                 }`}
                             </span>
-                           
+
                             <span className="text-gray-500">
                               {agreementData[packageItem.agreementId]
                                 .revenueShare &&
@@ -370,6 +447,17 @@ const StationsTable = (Props) => {
                       >
                         <Icon icon="fluent:delete-20-regular" height={20} />
                       </button>
+                      {userRole === ROLES.SUPER_ADMIN && (
+                        <button
+                          onClick={() =>
+                            handleArchiveRentsClick(packageItem.stationId)
+                          }
+                          className="text-warning hover:text-warning-dark"
+                          title="Archive all rents for this station"
+                        >
+                          <Icon icon="mdi:archive" height={20} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -394,6 +482,51 @@ const StationsTable = (Props) => {
                 className="px-4 py-2 bg-gray-300 text-black rounded"
               >
                 No
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showArchiveModal && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-9999">
+          <div className="bg-white dark:bg-boxdark p-6 rounded-lg shadow-lg max-w-md">
+            <div className="mb-4">
+              <h3 className="text-lg font-semibold text-black dark:text-white mb-2">
+                Archive All Rents?
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Are you sure you want to archive all rents for station{" "}
+                <strong>{archiveStationId}</strong>?
+              </p>
+              <p className="text-sm text-warning mt-2">
+                This will hide all rents from reports and lists. Archived rents
+                can only be viewed by super admins.
+              </p>
+            </div>
+            <div className="flex space-x-3 justify-end">
+              <button
+                onClick={() => {
+                  setShowArchiveModal(false);
+                  setArchiveStationId(null);
+                }}
+                disabled={archiving}
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-black dark:text-white rounded hover:bg-gray-400 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmArchiveRents}
+                disabled={archiving}
+                className="px-4 py-2 bg-warning text-white rounded hover:bg-warning-dark disabled:opacity-50 flex items-center gap-2"
+              >
+                {archiving && (
+                  <Icon
+                    icon="mdi:loading"
+                    className="animate-spin"
+                    height={16}
+                  />
+                )}
+                {archiving ? "Archiving..." : "Archive Rents"}
               </button>
             </div>
           </div>

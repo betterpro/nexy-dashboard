@@ -17,6 +17,8 @@ export type Rent = {
   };
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  archived?: boolean; // For archiving old rents
+  archivedAt?: Date;
 };
 
 export type RentUpdateData = {

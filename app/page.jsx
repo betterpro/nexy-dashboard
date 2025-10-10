@@ -23,6 +23,22 @@ const menuItems = [
     description: "Manage your charging stations",
   },
   {
+    title: "Station Data",
+    icon: "material-symbols-light:ev-station-outline",
+    href: "/new-stations",
+    roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE, ROLES.PARTNER],
+    color: "bg-cyan-500",
+    description: "Edit station information and settings",
+  },
+  {
+    title: "Screen Management",
+    icon: "material-symbols-light:display-settings-outline",
+    href: "/screen",
+    roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE, ROLES.PARTNER],
+    color: "bg-indigo-500",
+    description: "Manage station screen layouts",
+  },
+  {
     title: "Partners",
     icon: "mdi:account-group",
     href: "/partners",

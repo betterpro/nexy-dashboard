@@ -50,7 +50,7 @@ const menuCategories: MenuCategory[] = [
   {
     title: "Stations",
     icon: "material-symbols-light:ev-station-outline",
-    roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
+    roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE, ROLES.PARTNER],
     items: [
       {
         title: "Stations List",
@@ -68,13 +68,13 @@ const menuCategories: MenuCategory[] = [
         title: "Screen",
         path: "/screen",
         icon: "material-symbols-light:display-settings-outline",
-        roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
+        roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE, ROLES.PARTNER],
       },
       {
         title: "New Stations",
         path: "/new-stations",
         icon: "material-symbols-light:ev-station-outline",
-        roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE],
+        roles: [ROLES.SUPER_ADMIN, ROLES.FRANCHISEE, ROLES.PARTNER],
       },
       {
         title: "Station Management",

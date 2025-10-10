@@ -61,6 +61,19 @@ export const AuthProvider = ({ children }) => {
             return;
           }
 
+          // Additional validation for partner users
+          if (userData.role === ROLES.PARTNER && !userData.partnerId) {
+            console.warn("Partner user missing partnerId:", userData);
+            // Still allow access but log the warning
+            // Partners might need to be assigned to stations later
+          }
+
+          console.log("User authenticated:", {
+            role: userData.role,
+            franchiseeId: userData.franchiseeId,
+            partnerId: userData.partnerId,
+          });
+
           setUser({ ...u, ...userData });
           setUserRole(userData.role);
           setAuthorised(true);
