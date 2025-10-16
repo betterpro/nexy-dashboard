@@ -66,7 +66,7 @@ const menuItems = [
 
 const HomePage = () => {
   const { userRole } = useAuth();
-
+  console.log(userRole);
   const filteredMenuItems = menuItems.filter((item) =>
     item.roles.includes(userRole)
   );
